@@ -50,7 +50,7 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
 
     local weight = rollWeight(seed.Name)
 
-    Plant.new(plr, seed.Name, pos, weight)
+    Plant.new(self.Net, plr, seed.Name, pos, weight)
 
     Data[plr].inventory.seeds.Remove(i)
     seed:Destroy()
