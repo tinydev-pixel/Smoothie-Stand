@@ -4,21 +4,99 @@
     "$className": "DataModel",
 
     "ReplicatedStorage": {
-      "Shared": {
-        "$path": "src/shared"
+      "Source": {
+        "$className": "Folder",
+
+        "Core": {
+          "$path": "src/core"
+        },
+
+        "Game": {
+          "$path": "src/game"
+        },
+
+        "Features": {
+          "$className": "Folder",
+
+          "Inventory": {
+            "$className": "Folder",
+
+            "InventoryClient": {
+              "$path": "src/features/inventory/InventoryClient.luau"
+            }
+          },
+
+          "Planting": {
+            "$className": "Folder",
+
+            "PlantingClient": {
+              "$path": "src/features/planting/PlantingClient.luau"
+            }
+          },
+
+          "Upgrades": {
+            "$className": "Folder",
+
+            "UpgradesClient": {
+              "$path": "src/features/upgrades/UpgradesClient.luau"
+            }
+          }
+        }
       }
     },
 
     "ServerScriptService": {
-      "Server": {
-        "$path": "src/server"
+      "Bootstrap": {
+        "$path": "src/bootstrap/bootstrap.server.luau"
+      },
+
+      "Features": {
+        "$className": "Folder",
+
+        "Inventory": {
+          "$className": "Folder",
+
+          "InventoryServer": {
+            "$path": "src/features/inventory/InventoryServer.luau"
+          }
+        },
+
+        "Planting": {
+          "$className": "Folder",
+
+          "Classes": {
+            "$className": "Folder",
+
+            "Plant": {
+              "$path": "src/features/planting/classes/Plant.luau"
+            }
+          },
+
+          "PlantingServer": {
+            "$path": "src/features/planting/PlantingServer.luau"
+          }
+        },
+
+        "Plots": {
+          "$className": "Folder",
+
+          "PlotServer": {
+            "$path": "src/features/plots/PlotServer.luau"
+          }
+        },
+
+        "Upgrades": {
+          "$className": "Folder"
+        }
       }
     },
 
     "StarterPlayer": {
       "StarterPlayerScripts": {
-        "Client": {
-          "$path": "src/client"
+        "$className": "Folder",
+
+        "Bootstrap": {
+          "$path": "src/bootstrap/bootstrap.client.luau"
         }
       }
     },
