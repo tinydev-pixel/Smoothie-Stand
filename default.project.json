@@ -7,12 +7,48 @@
       "Source": {
         "$className": "Folder",
 
+        "Packages": {
+          "$path": "Packages"
+        },
+
         "Core": {
-          "$path": "src/core"
+          "$className": "Folder",
+
+          "Math": {
+            "$path": "src/core/math"
+          },
+
+          "Platform": {
+            "$path": "src/core/platform"
+          },
+
+          "Utils": {
+            "$path": "src/core/utils"
+          }
         },
 
         "Game": {
-          "$path": "src/game"
+          "$className": "Folder",
+
+          "Assets": {
+            "$path": "src/game/assets"
+          },
+
+          "Configurations": {
+            "$path": "src/game/configurations"
+          },
+
+          "Data": {
+            "$path": "src/game/Data.luau"
+          },
+
+          "Definitions": {
+            "$path": "src/game/Definitions.luau"
+          },
+
+          "Signals": {
+            "$path": "src/game/Signals.luau"
+          }
         },
 
         "Features": {
@@ -87,16 +123,6 @@
 
         "Upgrades": {
           "$className": "Folder"
-        }
-      }
-    },
-
-    "StarterPlayer": {
-      "StarterPlayerScripts": {
-        "$className": "Folder",
-
-        "Bootstrap": {
-          "$path": "src/bootstrap/bootstrap.client.luau"
         }
       }
     },
