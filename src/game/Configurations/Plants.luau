@@ -4,8 +4,7 @@ return {
             Min = 1, 
             Average = 2, 
             Max = 3
-        },
-
-        
+        }, 
+        GrowTime = 60,
     }
 } 

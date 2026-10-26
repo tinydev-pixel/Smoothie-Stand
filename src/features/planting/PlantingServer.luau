@@ -35,7 +35,7 @@ local function rollWeight(plantName: string): number
 end
 
 function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
-    if not PlotServer:canPlant(plr, pos) then return end
+    if typeof(pos) ~= "Vector3" or not PlotServer:canPlant(plr, pos) then return end
 
     local seed = GetEquippedTool(plr)
     if not seed then return end

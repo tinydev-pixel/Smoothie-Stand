@@ -13,8 +13,10 @@ export type UpgradeNode = {
 }
 
 export type Plant = {
+	Name: string,
+	PlantTime: number,
     Weight: number,
-	Pos: Vector3,
+	Pos: {number}
 }
 
 return {}
