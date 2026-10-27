@@ -16,6 +16,14 @@ export type Plant = {
 	Name: string,
 	PlantTime: number,
     Weight: number,
+	Pos: {number},
+	Crops: {Crop}
+}
+
+export type Crop = {
+	Name: string,
+	SpawnTime: number,
+	Weight: number,
 	Pos: {number}
 }
 

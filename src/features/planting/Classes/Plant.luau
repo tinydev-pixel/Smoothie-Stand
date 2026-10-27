@@ -1,35 +1,59 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Serialize = require(ReplicatedStorage.Source.Core.Utils.Serialize)
+local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
+local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
 local Plant = {}
 Plant.__index = Plant
 
-local function saveToData(plr: Player, plantName: string, pos: Vector3, weight: number)
-    local serPos = Serialize.SerializeVector3(pos)
+function Plant.connectGrowthLoop(self: Plant)
+    self.Janitor:Add(
+        task.spawn(function()
+            while true do
+                local stage = PlantingUtils.getGrowthStageFromPlantTime(self.Name, self.PlantTime)
+                if stage ~= self.LastStage then
+                    self.Net:fireAll("updatePlant", self.Id, self.Name, stage)
+                    self.LastStage = stage
+                end
 
-    
+                task.wait(1)
+            end
+        end), true
+    )
 end
 
-function Plant.new(net: typeof(Networker.server), farmer: Player, plantName: string, pos: Vector3, weight: number)
+function Plant.destroy(self: Plant)
+    self.Janitor:Cleanup()
+end
+
+function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, plantName: string, pos: Vector3, weight: number, plantTime: number, replicate: boolean?)
     local self: Plant = setmetatable({}, Plant)
 
-    --[[ 
-        First thing, the plant should be saved to the player's data
-        Second, the plant should be replicated to all clients
-        Third, the plant should be constantly updated and when fully grown, including the growth of crops
-    ]]
+    self.Net = net
+    self.Janitor = Janitor.new()
+    self.Id = id
+    self.Owner = farmer
+    self.Pos = pos
+    self.Weight = weight
+    self.Name = plantName
+    self.PlantTime = plantTime
+    self.LastStage = 1
 
-    
+    self:connectGrowthLoop()
 
     return self
 end
 
 type Plant = typeof(Plant) & {
+    Janitor: typeof(Janitor.new()),
     Net: typeof(Networker.server),
+    Id: number,
     Owner: Player,
-    Model: Model,
-    Name: string
+    Pos: Vector3,
+    Weight: number,
+    Name: string,
+    PlantTime: number,
+    LastStage: number,
 }
 
 return Plant 

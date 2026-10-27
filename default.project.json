@@ -67,6 +67,10 @@
 
             "PlantingClient": {
               "$path": "src/features/planting/PlantingClient.luau"
+            },
+
+            "PlantingUtils": {
+              "$path": "src/features/planting/PlantingUtils.luau"
             }
           },
 
@@ -105,6 +109,10 @@
 
             "Plant": {
               "$path": "src/features/planting/classes/Plant.luau"
+            },
+
+            "Crop": {
+              "$path": "src/features/planting/classes/Crop.luau"
             }
           },
 

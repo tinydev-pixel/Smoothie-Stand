@@ -1,6 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Definitions = require(script.Parent.Definitions)
-local Dataservice = require(ReplicatedStorage.Packages.Dataservice)
+local Dataservice = require(ReplicatedStorage.Source.Packages.Dataservice)
 
 local template = {
 	gardenLevel = 1,

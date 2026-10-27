@@ -2,16 +2,29 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local PlantingUtils = require(script.Parent.PlantingUtils)
 local Janitor = require(ReplicatedStorage.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Packages.Networker)
 local Spring = require(ReplicatedStorage.Packages.Spring)
+local Definitions = require(ReplicatedStorage.Source.Game.Definitions)
 
 local Mouse = Players.LocalPlayer:GetMouse()
 local SeedModels = ReplicatedStorage.Assets.Seeds
+local PlantModels = ReplicatedStorage.Assets.Plants
 
 local equipped = false
 
 local PlantingClient = {}
+
+local function spawnPlant(self: PlantingClient, id: number, plant: Definitions.Plant)
+    local stage = PlantingUtils.getGrowthStageFromPlantTime(plant.Name, plant.PlantTime)
+    local model = PlantModels:FindFirstChild(plant.Name):FindFirstChild(tostring(stage))
+    local clone = model:Clone()
+    clone:PivotTo(CFrame.new(plant.Pos))
+    clone.Parent = workspace
+
+    self.Plants[id] = clone
+end
 
 function PlantingClient.unequipped(self: PlantingClient)
     if not equipped then return end
@@ -78,6 +91,33 @@ function PlantingClient.playAnimation(self: PlantingClient, pos: Vector3, seedNa
     end)
 end
 
+function PlantingClient.updatePlant(self: PlantingClient, id: number, plantName: string, stage: number, pos: Vector3)
+    local plant = self.Plants[id]
+    local model = PlantModels:FindFirstChild(plantName):FindFirstChild(tostring(stage))
+    local clone = model:Clone()
+    clone:PivotTo(CFrame.new(pos))
+    clone.Parent = workspace
+
+    plant:Destroy()
+    self.Plants[id] = clone
+end
+
+function PlantingClient.spawnPlants(self: PlantingClient, plants: {[number]: {Definitions.Plant}})
+    for id, plant in plants do
+        spawnPlant(self, id, plant)
+    end
+end
+
+function PlantingClient.deletePlants(self: PlantingClient, plants: {number})
+    for _, id in plants do
+        local plant = self.Plants[id]
+        if plant then
+            plant:Destroy()
+            self.Plants[id] = nil
+        end
+    end
+end
+
 function PlantingClient.Init(self: PlantingClient)
     self.Net = Networker.client.new("Planting", self)
     self.Janitor = Janitor.new()
@@ -85,7 +125,8 @@ end
 
 type PlantingClient = typeof(PlantingClient) & {
     Net: typeof(Networker.client),
-    Janitor: typeof(Janitor.new())
+    Janitor: typeof(Janitor.new()),
+    Plants: {[number]: Model}
 }
 
 return PlantingClient :: PlantingClient
