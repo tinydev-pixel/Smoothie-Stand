@@ -109,10 +109,6 @@
 
             "Plant": {
               "$path": "src/features/planting/classes/Plant.luau"
-            },
-
-            "Crop": {
-              "$path": "src/features/planting/classes/Crop.luau"
             }
           },
 
