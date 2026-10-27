@@ -1,10 +1,10 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SafeTeleport = require(ReplicatedStorage.Core.Utils.SafeTeleport)
-local Info = require(ReplicatedStorage.Game.Assets.Info)
-local Signals = require(ReplicatedStorage.Game.Signals)
-local Janitor = require(ReplicatedStorage.Packages.Janitor)
-local Data = require(ReplicatedStorage.Game.Data).server
+local SafeTeleport = require(ReplicatedStorage.Source.Core.Utils.SafeTeleport)
+local Info = require(ReplicatedStorage.Source.Game.Assets.Info)
+local Signals = require(ReplicatedStorage.Source.Game.Signals)
+local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
+local Data = require(ReplicatedStorage.Source.Game.Data).server
 
 local Plots = workspace.Map.Plots
 local Gardens = ReplicatedStorage.Assets.Gardens
@@ -31,7 +31,7 @@ end
 local function getAvailablePlot(self: PlotServer): Instance?
     local best: Instance? = nil
     local bestId = math.huge
-    
+
     for _, plot in Plots:GetChildren() do
         local id = tonumber(plot.Name)
 
@@ -45,7 +45,7 @@ end
 
 function PlotServer.connectData(self: PlotServer, plr: Player, profile)
     local id = self.PlotOf[plr]
-    if profile.gardenLevel() > 1 then
+    if id and profile.gardenLevel() > 1 then
         updateGarden(id, profile.gardenLevel())
     end
 
@@ -71,6 +71,8 @@ function PlotServer.onPlrRemoving(self: PlotServer, plr: Player)
 end
 
 function PlotServer.onPlrAdded(self: PlotServer, plr: Player)
+    if self.PlotOf[plr] then return end
+
     local plot = getAvailablePlot(self)
     if not plot then
         moveToDifferentServer(plr)
@@ -82,9 +84,10 @@ function PlotServer.onPlrAdded(self: PlotServer, plr: Player)
     self.PlotOf[plr] = id
 
     local profile = Data[plr] or Data.Service:waitForData(plr)
-    if plr.Parent ~= Players then return end 
+    if not profile or not plr:IsDescendantOf(Players) then return end
 
-    local spawnPoint = plot.Main:FindFirstChildWhichIsA("SpawnLocation")
+    local main = plot:FindFirstChild("Main")
+    local spawnPoint = main and main:FindFirstChildWhichIsA("SpawnLocation")
     if spawnPoint then
         plr.RespawnLocation = spawnPoint
     end
@@ -116,14 +119,17 @@ end
 
 function PlotServer.canPlant(self: PlotServer, plr: Player, pos: Vector3): boolean
     local id = self.PlotOf[plr]
-    if not id then return end
+    if not id then return false end
 
-    local plot = Plots:FindFirstChild(id)
-    local garden = plot:FindFirstChild("Garden")
-    local area = garden:FindFirstChildWhichIsA("Model")
-    local relative = area.CFrame:PointToObjectSpace(pos)
+    local plot = Plots:FindFirstChild(tostring(id))
+    local garden = plot and plot:FindFirstChild("Garden")
+    local area = garden and garden:FindFirstChildWhichIsA("Model")
+    if not area then return false end
 
-    return math.abs(relative.X) <= area.Size.X / 2 and math.abs(relative.Z) <= area.Size.Z / 2
+    local cframe, size = area:GetBoundingBox()
+    local relative = cframe:PointToObjectSpace(pos)
+
+    return math.abs(relative.X) <= size.X / 2 and math.abs(relative.Z) <= size.Z / 2
 end
 
 type PlotServer = typeof(PlotServer) & {

@@ -15,16 +15,26 @@ export type UpgradeNode = {
 export type Plant = {
 	Name: string,
 	PlantTime: number,
-    Weight: number,
+	Weight: number,
 	Pos: {number},
-	Crops: {Crop}
+	Crops: {Crop}?
 }
 
 export type Crop = {
 	Name: string,
 	SpawnTime: number,
 	Weight: number,
-	Pos: {number}
+	Slot: number,
+	CFrame: {number}
+}
+
+export type PlantSnapshot = {
+	Id: number,
+	Name: string,
+	PlantTime: number,
+	Weight: number,
+	Pos: {number},
+	Crops: {Crop}
 }
 
 return {}

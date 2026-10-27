@@ -4,11 +4,23 @@ local Plants = require(ReplicatedStorage.Source.Game.Configurations.Plants)
 
 local PlantingUtils = {}
 
-function PlantingUtils.rollWeight(name: string, type: string): number
-	local config = (type == "Plant") and Plants[name].Weight or Crops[name].Weight
-    local min = config.Min
-    local average = config.Average
-    local max = config.Max
+local function getGrowthStage(growTime: number, growthStages: number, startTime: number): number
+    local progress = 1
+
+    if growTime > 0 then
+        progress = math.clamp((workspace:GetServerTimeNow() - startTime) / growTime, 0, 1)
+    end
+
+    return math.min(math.floor(progress * growthStages) + 1, growthStages)
+end
+
+function PlantingUtils.rollWeight(name: string, kind: string): number
+    local config = if kind == "Plant" then Plants[name] else Crops[name]
+    assert(config, "Weight config is missing for " .. name .. "!")
+
+    local min = config.Weight.Min
+    local average = config.Weight.Average
+    local max = config.Weight.Max
 
     local total = 0
 
@@ -17,30 +29,30 @@ function PlantingUtils.rollWeight(name: string, type: string): number
     end
 
     local normalized = total / 5
-    local weight
 
     if normalized < 0.5 then
-        weight = min + (average - min) * (normalized * 2)
-    else
-        weight = average + (max - average) * ((normalized - 0.5) * 2)
+        return min + (average - min) * (normalized * 2)
     end
 
-    return weight
+    return average + (max - average) * ((normalized - 0.5) * 2)
 end
 
 function PlantingUtils.getGrowthStageFromPlantTime(plantName: string, plantTime: number): number?
-	local config = Plants[plantName]
-	if not config then
-		return nil
-	end
+    local config = Plants[plantName]
+    if not config then
+        return nil
+    end
 
-	local growTime = config.GrowTime
-	local growthStages = config.GrowthStages
-	local timePassed = workspace:GetServerTimeNow() - plantTime
-	local progress = math.clamp(timePassed / growTime, 0, 1)
-	local stage = math.floor(progress * growthStages) + 1
+    return getGrowthStage(config.GrowTime, config.GrowthStages, plantTime)
+end
 
-	return math.min(stage, growthStages)
+function PlantingUtils.getGrowthStageFromCropTime(cropName: string, spawnTime: number): number?
+    local config = Crops[cropName]
+    if not config then
+        return nil
+    end
+
+    return getGrowthStage(config.GrowTime, config.GrowthStages, spawnTime)
 end
 
 type PlantingUtils = typeof(PlantingUtils)
