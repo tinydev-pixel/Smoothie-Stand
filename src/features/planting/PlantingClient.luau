@@ -14,14 +14,14 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local SeedModels = ReplicatedStorage.Assets.Seeds
 local PlantModels = ReplicatedStorage.Assets.Plants
-local CropModels = ReplicatedStorage.Assets:FindFirstChild("Crops")
+local CropModels = ReplicatedStorage.Assets.Crops.Models
 
 local equipped = false
 
 local PlantingClient = {}
 
-local function getStageModel(models: Instance?, name: string, stage: number?): Model?
-    if not models or not stage then
+local function getStageModel(models: Instance, name: string, stage: number?): Model?
+    if not stage then
         return nil
     end
 
@@ -35,7 +35,7 @@ local function getStageModel(models: Instance?, name: string, stage: number?): M
     return nil
 end
 
-local function spawnStageModel(models: Instance?, name: string, stage: number?, cframe: CFrame): Model?
+local function spawnStageModel(models: Instance, name: string, stage: number?, cframe: CFrame, scale: number): Model?
     local model = getStageModel(models, name, stage)
     if not model then
         warn("Model is missing for " .. name .. " at stage " .. tostring(stage) .. "!")
@@ -43,6 +43,7 @@ local function spawnStageModel(models: Instance?, name: string, stage: number?, 
     end
 
     local clone = model:Clone()
+    clone:ScaleTo(scale)
     clone:PivotTo(cframe)
     clone.Parent = workspace
 
@@ -115,7 +116,8 @@ end
 
 local function createCrop(self: PlantingClient, plantId: number, crop: Definitions.Crop)
     local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime)
-    local clone = spawnStageModel(CropModels, crop.Name, stage, Serialize.UnserializeCFrame(crop.CFrame))
+    local scale = PlantingUtils.getScale("Crop", crop.Name, crop.Weight)
+    local clone = spawnStageModel(CropModels, crop.Name, stage, Serialize.UnserializeCFrame(crop.CFrame), scale)
     if not clone then return end
 
     local crops = self.Crops[plantId]
@@ -137,7 +139,8 @@ local function createPlant(self: PlantingClient, plant: Definitions.PlantSnapsho
 
     local stage = PlantingUtils.getGrowthStageFromPlantTime(plant.Name, plant.PlantTime)
     local pos = Serialize.UnserializeVector3(plant.Pos)
-    local clone = spawnStageModel(PlantModels, plant.Name, stage, CFrame.new(pos))
+    local scale = PlantingUtils.getScale("Plant", plant.Name, plant.Weight)
+    local clone = spawnStageModel(PlantModels, plant.Name, stage, CFrame.new(pos), scale)
     if not clone then return end
 
     self.Plants[plant.Id] = clone
@@ -217,7 +220,7 @@ function PlantingClient.updatePlant(self: PlantingClient, id: number, plantName:
     local old = self.Plants[id]
     if not old then return end
 
-    local clone = spawnStageModel(PlantModels, plantName, stage, old:GetPivot())
+    local clone = spawnStageModel(PlantModels, plantName, stage, old:GetPivot(), old:GetScale())
     if not clone then return end
 
     old:Destroy()
@@ -229,7 +232,7 @@ function PlantingClient.updateCrop(self: PlantingClient, plantId: number, slot: 
     local old = crops and crops[slot]
     if not old then return end
 
-    local clone = spawnStageModel(CropModels, cropName, stage, old:GetPivot())
+    local clone = spawnStageModel(CropModels, cropName, stage, old:GetPivot(), old:GetScale())
     if not clone then return end
 
     old:Destroy()

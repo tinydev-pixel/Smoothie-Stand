@@ -9,6 +9,7 @@ local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
 local PlantModels = ReplicatedStorage.Assets.Plants
+local CropTools = ReplicatedStorage.Assets.Crops.Tools
 local MAX_HARVEST_DISTANCE = 25
 local spawnOffsets: {[string]: {CFrame}} = {}
 
@@ -17,6 +18,53 @@ Plant.__index = Plant
 
 local function isFullyGrown(self: Plant, stage: number?): boolean
     return stage ~= nil and stage >= self.Config.GrowthStages
+end
+
+local function scaleCFrame(cframe: CFrame, scale: number): CFrame
+    return CFrame.new(cframe.Position * scale) * cframe.Rotation
+end
+
+local function scaleTool(tool: Tool, scale: number)
+    if scale == 1 then return end
+
+    local handle = tool:FindFirstChild("Handle")
+    if not handle or not handle:IsA("BasePart") then
+        warn("Crop tool " .. tool.Name .. " has no Handle, it cannot be scaled!")
+        return
+    end
+
+    local rootCFrame = handle.CFrame
+    local parts = {}
+    local welds = {}
+
+    for _, descendant in tool:GetDescendants() do
+        if descendant:IsA("BasePart") then
+            table.insert(parts, descendant)
+        elseif descendant:IsA("WeldConstraint") and descendant.Enabled then
+            descendant.Enabled = false
+            table.insert(welds, descendant)
+        elseif descendant:IsA("JointInstance") then
+            descendant.C0 = scaleCFrame(descendant.C0, scale)
+            descendant.C1 = scaleCFrame(descendant.C1, scale)
+        elseif descendant:IsA("Attachment") then
+            descendant.Position *= scale
+        elseif descendant:IsA("SpecialMesh") then
+            descendant.Offset *= scale
+        end
+    end
+
+    for _, part in parts do
+        local relative = rootCFrame:ToObjectSpace(part.CFrame)
+
+        part.Size *= scale
+        part.CFrame = rootCFrame * scaleCFrame(relative, scale)
+    end
+
+    for _, weld in welds do
+        weld.Enabled = true
+    end
+
+    tool.Grip = scaleCFrame(tool.Grip, scale)
 end
 
 local function getSpawnOffsets(plantName: string): {CFrame}
@@ -55,11 +103,14 @@ local function getSpawnOffsets(plantName: string): {CFrame}
 end
 
 local function giveCropTool(backpack: Backpack, crop: Definitions.Crop)
-    local tool = Instance.new("Tool")
-    tool.Name = crop.Name
-    tool.ToolTip = crop.Name
-    tool.RequiresHandle = false
-    tool.CanBeDropped = false
+    local template = CropTools:FindFirstChild(crop.Name)
+    if not template or not template:IsA("Tool") then
+        warn("Crop tool is missing for " .. crop.Name .. "!")
+        return
+    end
+
+    local tool = template:Clone()
+    scaleTool(tool, PlantingUtils.getScale("Crop", crop.Name, crop.Weight))
     tool:SetAttribute("IsCrop", true)
     tool:SetAttribute("Weight", crop.Weight)
     tool.Parent = backpack
@@ -116,7 +167,7 @@ local function spawnCrops(self: Plant)
             SpawnTime = workspace:GetServerTimeNow(),
             Weight = PlantingUtils.rollWeight(self.CropName, "Crop"),
             Slot = slot,
-            CFrame = Serialize.SerializeCFrame(origin * offsets[slot])
+            CFrame = Serialize.SerializeCFrame(origin * scaleCFrame(offsets[slot], self.Scale))
         }
 
         self.Crops[slot] = crop
@@ -233,6 +284,7 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
     self.Owner = farmer
     self.Pos = pos
     self.Weight = weight
+    self.Scale = PlantingUtils.getScale("Plant", plantName, weight)
     self.Name = plantName
     self.PlantTime = plantTime
     self.LastStage = stage or 1
@@ -272,6 +324,7 @@ type Plant = typeof(Plant) & {
     Owner: Player,
     Pos: Vector3,
     Weight: number,
+    Scale: number,
     Name: string,
     PlantTime: number,
     LastStage: number,

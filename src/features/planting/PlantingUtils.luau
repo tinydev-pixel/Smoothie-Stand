@@ -2,6 +2,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Crops = require(ReplicatedStorage.Source.Game.Configurations.Crops)
 local Plants = require(ReplicatedStorage.Source.Game.Configurations.Plants)
 
+local MIN_SCALE = 0.5
+local MAX_SCALE = 2
+
 local PlantingUtils = {}
 
 local function getGrowthStage(growTime: number, growthStages: number, startTime: number): number
@@ -35,6 +38,20 @@ function PlantingUtils.rollWeight(name: string, kind: string): number
     end
 
     return average + (max - average) * ((normalized - 0.5) * 2)
+end
+
+function PlantingUtils.getScale(kind: string, name: string, weight: number): number
+    local config = if kind == "Plant" then Plants[name] else Crops[name]
+    if not config or type(weight) ~= "number" then
+        return 1
+    end
+
+    local average = config.Weight.Average
+    if average <= 0 or weight <= 0 then
+        return 1
+    end
+
+    return math.clamp((weight / average) ^ (1 / 3), MIN_SCALE, MAX_SCALE)
 end
 
 function PlantingUtils.getGrowthStageFromPlantTime(plantName: string, plantTime: number): number?
