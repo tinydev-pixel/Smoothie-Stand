@@ -97,6 +97,15 @@ function PlantingServer.requestPlants(self: PlantingServer, plr: Player)
     end
 end
 
+function PlantingServer.harvestCrop(self: PlantingServer, plr: Player, plantId: number, slot: number)
+    if type(plantId) ~= "number" or type(slot) ~= "number" then return end
+
+    local plant = self.Plants[plantId]
+    if not plant then return end
+
+    plant:harvestCrop(plr, slot)
+end
+
 function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
     if typeof(pos) ~= "Vector3" or not isValidPosition(pos) or not PlotServer:canPlant(plr, pos) then return end
 
@@ -140,7 +149,7 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
 end
 
 function PlantingServer.Init(self: PlantingServer)
-    self.Net = Networker.server.new("Planting", {self.plant, self.requestPlants})
+    self.Net = Networker.server.new("Planting", {self.plant, self.requestPlants, self.harvestCrop})
     self.Plants = {}
     self.Loaded = {}
     self.Synced = {}

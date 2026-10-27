@@ -30,11 +30,17 @@ export type Crop = {
 
 export type PlantSnapshot = {
 	Id: number,
+	OwnerId: number,
 	Name: string,
 	PlantTime: number,
 	Weight: number,
 	Pos: {number},
 	Crops: {Crop}
+}
+
+export type InventoryCrop = {
+	Name: string,
+	Weight: number
 }
 
 return {}

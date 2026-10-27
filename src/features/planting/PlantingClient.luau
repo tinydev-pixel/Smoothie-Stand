@@ -4,12 +4,14 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
 local Serialize = require(ReplicatedStorage.Source.Core.Utils.Serialize)
+local CropConfigs = require(ReplicatedStorage.Source.Game.Configurations.Crops)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 local Spring = require(ReplicatedStorage.Source.Packages.Spring)
 local Definitions = require(ReplicatedStorage.Source.Game.Definitions)
 
-local Mouse = Players.LocalPlayer:GetMouse()
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 local SeedModels = ReplicatedStorage.Assets.Seeds
 local PlantModels = ReplicatedStorage.Assets.Plants
 local CropModels = ReplicatedStorage.Assets:FindFirstChild("Crops")
@@ -47,6 +49,48 @@ local function spawnStageModel(models: Instance?, name: string, stage: number?, 
     return clone
 end
 
+local function addHarvestPrompt(self: PlantingClient, plantId: number, slot: number, cropName: string, stage: number?, model: Model)
+    if self.Owners[plantId] ~= LocalPlayer.UserId then return end
+
+    local config = CropConfigs[cropName]
+    if not config then return end
+
+    local part = Instance.new("Part")
+    part.Name = "HarvestPrompt"
+    part.Size = Vector3.one
+    part.Transparency = 1
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanQuery = false
+    part.CanTouch = false
+    part.CFrame = model:GetPivot()
+
+    local prompt = Instance.new("ProximityPrompt")
+    prompt.ActionText = "Harvest"
+    prompt.ObjectText = cropName
+    prompt.HoldDuration = 0
+    prompt.MaxActivationDistance = 10
+    prompt.RequiresLineOfSight = false
+    prompt.Enabled = stage ~= nil and stage >= config.GrowthStages
+    prompt.Parent = part
+
+    prompt.Triggered:Connect(function()
+        self.Net:fire("harvestCrop", plantId, slot)
+    end)
+
+    part.Parent = model
+end
+
+local function clearCrop(self: PlantingClient, plantId: number, slot: number)
+    local crops = self.Crops[plantId]
+    local crop = crops and crops[slot]
+
+    if crop then
+        crop:Destroy()
+        crops[slot] = nil
+    end
+end
+
 local function clearCrops(self: PlantingClient, plantId: number)
     local crops = self.Crops[plantId]
     if not crops then return end
@@ -66,6 +110,7 @@ local function clearPlant(self: PlantingClient, id: number)
     end
 
     clearCrops(self, id)
+    self.Owners[id] = nil
 end
 
 local function createCrop(self: PlantingClient, plantId: number, crop: Definitions.Crop)
@@ -84,6 +129,7 @@ local function createCrop(self: PlantingClient, plantId: number, crop: Definitio
     end
 
     crops[crop.Slot] = clone
+    addHarvestPrompt(self, plantId, crop.Slot, crop.Name, stage, clone)
 end
 
 local function createPlant(self: PlantingClient, plant: Definitions.PlantSnapshot)
@@ -95,6 +141,7 @@ local function createPlant(self: PlantingClient, plant: Definitions.PlantSnapsho
     if not clone then return end
 
     self.Plants[plant.Id] = clone
+    self.Owners[plant.Id] = plant.OwnerId
 
     for _, crop in plant.Crops or {} do
         createCrop(self, plant.Id, crop)
@@ -187,6 +234,7 @@ function PlantingClient.updateCrop(self: PlantingClient, plantId: number, slot: 
 
     old:Destroy()
     crops[slot] = clone
+    addHarvestPrompt(self, plantId, slot, cropName, stage, clone)
 end
 
 function PlantingClient.spawnPlants(self: PlantingClient, plants: {Definitions.PlantSnapshot})
@@ -201,6 +249,10 @@ function PlantingClient.spawnCrop(self: PlantingClient, plantId: number, crop: D
     createCrop(self, plantId, crop)
 end
 
+function PlantingClient.deleteCrop(self: PlantingClient, plantId: number, slot: number)
+    clearCrop(self, plantId, slot)
+end
+
 function PlantingClient.deletePlants(self: PlantingClient, plants: {number})
     for _, id in plants do
         clearPlant(self, id)
@@ -210,6 +262,7 @@ end
 function PlantingClient.Init(self: PlantingClient)
     self.Plants = {}
     self.Crops = {}
+    self.Owners = {}
     self.Janitor = Janitor.new()
     self.Net = Networker.client.new("Planting", self)
     self.Net:fire("requestPlants")
@@ -219,7 +272,8 @@ type PlantingClient = typeof(PlantingClient) & {
     Net: typeof(Networker.client),
     Janitor: typeof(Janitor.new()),
     Plants: {[number]: Model},
-    Crops: {[number]: {[number]: Model}}
+    Crops: {[number]: {[number]: Model}},
+    Owners: {[number]: number}
 }
 
 return PlantingClient :: PlantingClient

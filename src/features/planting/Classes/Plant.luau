@@ -3,11 +3,13 @@ local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.Plantin
 local Serialize = require(ReplicatedStorage.Source.Core.Utils.Serialize)
 local Crops = require(ReplicatedStorage.Source.Game.Configurations.Crops)
 local Plants = require(ReplicatedStorage.Source.Game.Configurations.Plants)
+local Data = require(ReplicatedStorage.Source.Game.Data).server
 local Definitions = require(ReplicatedStorage.Source.Game.Definitions)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
 local PlantModels = ReplicatedStorage.Assets.Plants
+local MAX_HARVEST_DISTANCE = 25
 local spawnOffsets: {[string]: {CFrame}} = {}
 
 local Plant = {}
@@ -50,6 +52,17 @@ local function getSpawnOffsets(plantName: string): {CFrame}
 
     spawnOffsets[plantName] = offsets
     return offsets
+end
+
+local function giveCropTool(backpack: Backpack, crop: Definitions.Crop)
+    local tool = Instance.new("Tool")
+    tool.Name = crop.Name
+    tool.ToolTip = crop.Name
+    tool.RequiresHandle = false
+    tool.CanBeDropped = false
+    tool:SetAttribute("IsCrop", true)
+    tool:SetAttribute("Weight", crop.Weight)
+    tool.Parent = backpack
 end
 
 local function saveCrops(self: Plant)
@@ -114,6 +127,42 @@ local function spawnCrops(self: Plant)
     saveCrops(self)
 end
 
+function Plant.harvestCrop(self: Plant, plr: Player, slot: number)
+    if self.Destroyed or plr ~= self.Owner then return end
+
+    local crop = self.Crops[slot]
+    if not crop then return end
+
+    local config = Crops[crop.Name]
+    if not config then return end
+
+    local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime)
+    if not stage or stage < config.GrowthStages then return end
+
+    local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local cropPos = Serialize.UnserializeCFrame(crop.CFrame).Position
+    if (root.Position - cropPos).Magnitude > MAX_HARVEST_DISTANCE then return end
+
+    local data = Data[plr]
+    local backpack = plr:FindFirstChildOfClass("Backpack")
+    if not data or not backpack then return end
+
+    self.Crops[slot] = nil
+    self.CropStages[slot] = nil
+    saveCrops(self)
+
+    self.Net:fireAll("deleteCrop", self.Id, slot)
+
+    data.inventory.crops.Insert({
+        Name = crop.Name,
+        Weight = crop.Weight
+    })
+
+    giveCropTool(backpack, crop)
+end
+
 function Plant.update(self: Plant)
     if self.Destroyed then return end
 
@@ -151,6 +200,7 @@ function Plant.snapshot(self: Plant): Definitions.PlantSnapshot
 
     return {
         Id = self.Id,
+        OwnerId = self.Owner.UserId,
         Name = self.Name,
         PlantTime = self.PlantTime,
         Weight = self.Weight,
