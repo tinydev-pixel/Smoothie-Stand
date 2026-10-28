@@ -11,6 +11,10 @@
           "$path": "Packages"
         },
 
+        "Bootstrap": {
+          "$path": "src/boostrap/Bootstrap.client.luau"
+        },
+
         "Core": {
           "$className": "Folder",
 
@@ -87,7 +91,7 @@
 
     "ServerScriptService": {
       "Bootstrap": {
-        "$path": "src/bootstrap/bootstrap.server.luau"
+        "$path": "src/bootstrap/Bootstrap.server.luau"
       },
 
       "Features": {
