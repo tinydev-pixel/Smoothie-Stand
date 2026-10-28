@@ -12,7 +12,7 @@
         },
 
         "Bootstrap": {
-          "$path": "src/boostrap/Bootstrap.client.luau"
+          "$path": "src/bootstrap/Bootstrap.client.luau"
         },
 
         "Core": {
