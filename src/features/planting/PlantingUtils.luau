@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Crops = require(ReplicatedStorage.Source.Game.Configurations.Crops)
 local Plants = require(ReplicatedStorage.Source.Game.Configurations.Plants)
+local Seeds = require(ReplicatedStorage.Source.Game.Configurations.Seeds)
 
 local MIN_SCALE = 0.5
 local MAX_SCALE = 2
@@ -70,6 +71,13 @@ function PlantingUtils.getGrowthStageFromCropTime(cropName: string, spawnTime: n
     end
 
     return getGrowthStage(config.GrowTime, config.GrowthStages, spawnTime)
+end
+
+function PlantingUtils.isSeed(name: string): boolean
+    if not name then return end
+
+    local seedName = name:gsub(" Seed", "")
+    return table.find(Seeds.Order, seedName) ~= nil
 end
 
 type PlantingUtils = typeof(PlantingUtils)

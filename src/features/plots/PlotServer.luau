@@ -93,9 +93,13 @@ function PlotServer.onPlrAdded(self: PlotServer, plr: Player)
 
     local main = plot:FindFirstChild("Main")
     local spawnPoint = main and main:FindFirstChildWhichIsA("SpawnLocation")
-    if spawnPoint then
-        plr.RespawnLocation = spawnPoint
+    if not spawnPoint then
+        warn("Plot " .. plot.Name .. " is missing a spawn location!")
+        return
     end
+
+    plr.RespawnLocation = spawnPoint
+    plr.Character:PivotTo(spawnPoint.CFrame)
 
     self:connectData(plr, profile)
 

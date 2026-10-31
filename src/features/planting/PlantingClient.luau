@@ -11,14 +11,40 @@ local Spring = require(ReplicatedStorage.Source.Packages.Spring)
 local Definitions = require(ReplicatedStorage.Source.Game.Definitions)
 
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
-local SeedModels = ReplicatedStorage.Assets.Seeds
+local SeedModels = ReplicatedStorage.Assets.Seeds.Models
 local PlantModels = ReplicatedStorage.Assets.Plants
 local CropModels = ReplicatedStorage.Assets.Crops.Models
+local RAY_LENGTH = 500
+
+local PlantFolder = Instance.new("Folder")
+PlantFolder.Name = "ClientPlants"
+PlantFolder.Parent = workspace
 
 local equipped = false
 
 local PlantingClient = {}
+
+local function getGroundPosition(screenPos: Vector2): Vector3?
+    local camera = workspace.CurrentCamera
+    if not camera then
+        return nil
+    end
+
+    local filter: {Instance} = {PlantFolder}
+    local character = LocalPlayer.Character
+    if character then
+        table.insert(filter, character)
+    end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = filter
+
+    local ray = camera:ScreenPointToRay(screenPos.X, screenPos.Y)
+    local result = workspace:Raycast(ray.Origin, ray.Direction * RAY_LENGTH, params)
+
+    return result and result.Position
+end
 
 local function getStageModel(models: Instance, name: string, stage: number?): Model?
     if not stage then
@@ -45,7 +71,7 @@ local function spawnStageModel(models: Instance, name: string, stage: number?, c
     local clone = model:Clone()
     clone:ScaleTo(scale)
     clone:PivotTo(cframe)
-    clone.Parent = workspace
+    clone.Parent = PlantFolder
 
     return clone
 end
@@ -167,7 +193,10 @@ function PlantingClient.equipped(self: PlantingClient)
             if gpe then return end
 
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                self.Net:fire("plant", Mouse.Hit.Position)
+                local pos = getGroundPosition(Vector2.new(input.Position.X, input.Position.Y))
+                if pos then
+                    self.Net:fire("plant", pos)
+                end
             end
         end), "Disconnect"
     )
@@ -183,8 +212,16 @@ function PlantingClient.playAnimation(self: PlantingClient, pos: Vector3, seedNa
     local clone = model:Clone()
     local startPos = pos + Vector3.new(0, 5, 0)
 
+    for _, d in clone:GetDescendants() do
+        if d:IsA("BasePart") then
+            d.Anchored = true
+            d.CanCollide = false
+            d.CanQuery = false
+        end
+    end
+
     clone:PivotTo(CFrame.new(startPos))
-    clone.Parent = workspace
+    clone.Parent = PlantFolder
 
     local posSpring = Spring.new(startPos, 0.8, 1)
     posSpring.Target = pos

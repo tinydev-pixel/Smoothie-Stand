@@ -112,9 +112,9 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
     local seed = GetEquippedTool(plr)
     if not seed then return end
 
-    local seedName = seed.Name
+    local seedName = seed.Name:gsub(" Seed", "")
 
-    if not Seeds.Order[seedName] or not Seeds.Data[seedName] then
+    if not PlantingUtils.isSeed(seed.Name) then
         warn("Seed config is missing for " .. seedName .. "!")
         return
     end
@@ -149,7 +149,7 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
 end
 
 function PlantingServer.Init(self: PlantingServer)
-    self.Net = Networker.server.new("Planting", {self.plant, self.requestPlants, self.harvestCrop})
+    self.Net = Networker.server.new("Planting", self, {self.plant, self.requestPlants, self.harvestCrop})
     self.Plants = {}
     self.Loaded = {}
     self.Synced = {}

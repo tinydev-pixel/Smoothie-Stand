@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 local PlantingClient = require(ReplicatedStorage.Source.Features.Planting.PlantingClient)
+local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
 local ImageIds = require(ReplicatedStorage.Source.Game.Assets.ImageIds)
 local Seeds = require(ReplicatedStorage.Source.Game.Configurations.Seeds)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
@@ -76,6 +77,11 @@ local function getHoveredContainer(point: Vector2): GuiObject?
     return nil
 end
 
+local function matchesSearch(name: string): boolean
+    local text = string.lower(Inventory.TextBox.Text)
+    return text == "" or string.find(string.lower(name), text, 1, true) ~= nil
+end
+
 local function startDrag(card: typeof(Template))
     dragging = true
     draggingItem = card
@@ -115,7 +121,7 @@ local function createCard(self: InventoryClient, name: string)
 
     card.Activated:Connect(function()
         if not self.Enabled then return end
-        if os.clock() < suppressUntil then return end
+        if dragging or os.clock() < suppressUntil then return end
 
         self.Net:fire("equip", name)
     end)
@@ -135,11 +141,9 @@ end
 
 local function connectSearchBar()
     Inventory.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
-        local text = string.lower(Inventory.TextBox.Text)
-
         for _, card in Inventory.ScrollingFrame:GetChildren() do
             if card:IsA("GuiObject") then
-                card.Visible = string.find(string.lower(card.Name), text, 1, true) ~= nil
+                card.Visible = matchesSearch(card.Name)
             end
         end
     end)
@@ -342,6 +346,7 @@ function InventoryClient.sync(self: InventoryClient, items: {{Name: string, Amou
         inventory[index] = info.Name
 
         card.LayoutOrder = index
+        card.Visible = inHotbar or matchesSearch(info.Name)
         card.ItemAmount.Text = if info.Amount > 1 then "x" .. info.Amount else ""
         card.ItemNumber.Text = if inHotbar then tostring(index) else ""
         card.EquippedEffect.Enabled = (info.Name == equipped)
@@ -372,10 +377,12 @@ function InventoryClient.sync(self: InventoryClient, items: {{Name: string, Amou
 
     --// Support for different items (seeds, tools, etc.)
 
-    if Seeds.Order[equipped] then
-        PlantingClient:equipped()
-    elseif Seeds.Order[previousEquipped] then
-        PlantingClient:unequipped()
+    if equipped ~= previousEquipped then
+        if PlantingUtils.isSeed(equipped) then
+            PlantingClient:equipped()
+        elseif PlantingUtils.isSeed(previousEquipped) then
+            PlantingClient:unequipped()
+        end
     end
 end
 
