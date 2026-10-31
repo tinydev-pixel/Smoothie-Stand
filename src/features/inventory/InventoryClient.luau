@@ -3,11 +3,11 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
-local PlantingClient = require(ReplicatedStorage.Features.Planting.PlantingClient)
-local ImageIds = require(ReplicatedStorage.Game.Assets.ImageIds)
-local Seeds = require(ReplicatedStorage.Game.Configurations.Seeds)
-local Janitor = require(ReplicatedStorage.Packages.Janitor)
-local Networker = require(ReplicatedStorage.Packages.Networker)
+local PlantingClient = require(ReplicatedStorage.Source.Features.Planting.PlantingClient)
+local ImageIds = require(ReplicatedStorage.Source.Game.Assets.ImageIds)
+local Seeds = require(ReplicatedStorage.Source.Game.Configurations.Seeds)
+local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
+local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
 local Template = ReplicatedStorage.Assets.UI.Item
 local Player = Players.LocalPlayer

@@ -6,7 +6,7 @@ local Signals = require(ReplicatedStorage.Source.Game.Signals)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Data = require(ReplicatedStorage.Source.Game.Data).server
 
-local Plots = workspace.Map.Plots
+local Plots = workspace.Plots
 local Gardens = ReplicatedStorage.Assets.Gardens
 
 local PlotServer = {}
@@ -15,9 +15,14 @@ local function moveToDifferentServer(plr: Player)
     SafeTeleport(Info.placeId, plr)
 end
 
-local function updateGarden(plotId: number, gardenLevel: number)
+local function getGardenFolder(plotId: number): Folder?
     local plot = Plots:FindFirstChild(tostring(plotId))
-    local gardenCont = plot and plot:FindFirstChild("Garden")
+    local main = plot and plot:FindFirstChild("Main")
+    return main and main:FindFirstChild("Garden")
+end
+
+local function updateGarden(plotId: number, gardenLevel: number)
+    local gardenCont = getGardenFolder(plotId)
     local newGarden = Gardens:FindFirstChild(tostring(gardenLevel))
     if not (gardenCont and newGarden) then
         warn(("updateGarden failed: plot %d, level %d"):format(plotId, gardenLevel))
@@ -28,7 +33,7 @@ local function updateGarden(plotId: number, gardenLevel: number)
     newGarden:Clone().Parent = gardenCont
 end
 
-local function getAvailablePlot(self: PlotServer): Instance?
+local function getAvailablePlot(self: PlotServer): Folder?
     local best: Instance? = nil
     local bestId = math.huge
 
@@ -93,7 +98,6 @@ function PlotServer.onPlrAdded(self: PlotServer, plr: Player)
     end
 
     self:connectData(plr, profile)
-    plr:LoadCharacterAsync()
 
     Signals.plotAssigned:Fire(plr, id)
 end
@@ -102,7 +106,6 @@ function PlotServer.Init(self: PlotServer)
     self.Janitor = Janitor.new()
     self.Plots = {}
     self.PlotOf = {}
-    Players.CharacterAutoLoads = false
 
     Players.PlayerAdded:Connect(function(plr)
         task.spawn(self.onPlrAdded, self, plr)
@@ -121,9 +124,9 @@ function PlotServer.canPlant(self: PlotServer, plr: Player, pos: Vector3): boole
     local id = self.PlotOf[plr]
     if not id then return false end
 
-    local plot = Plots:FindFirstChild(tostring(id))
-    local garden = plot and plot:FindFirstChild("Garden")
-    local area = garden and garden:FindFirstChildWhichIsA("Model")
+    local garden = getGardenFolder(id)
+    local model = garden and garden:FindFirstChildWhichIsA("Model")
+    local area = model and model:FindFirstChild("Dirt")
     if not area then return false end
 
     local cframe, size = area:GetBoundingBox()

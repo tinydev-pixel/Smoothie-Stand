@@ -1,6 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Networker = require(ReplicatedStorage.Packages.Networker)
+local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
 local hotbarLimit = 6
 

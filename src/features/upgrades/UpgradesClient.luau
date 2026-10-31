@@ -1,12 +1,13 @@
+--[[
 local UpgradeTreeManager = {}
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local UpgradeTree = require(ReplicatedStorage.Shared.Util.UpgradeTree)
-local Formatter = require(ReplicatedStorage.Shared.Util.Formatter)
 local GameStateReplica = require(ReplicatedStorage.Shared.Data.GameStateReplica)
 local Remotes = require(ReplicatedStorage.Shared.Remotes)
+local ImageIds = require(ReplicatedStorage.Source.Game.Assets.ImageIds)
+local Upgrades = require(ReplicatedStorage.Source.Game.Configurations.Upgrades)
 
 local Player = Players.LocalPlayer
 local UserKey = tostring(Player.UserId)
@@ -14,8 +15,8 @@ local PlayerGui = Player:WaitForChild("PlayerGui")
 
 local Main = PlayerGui:WaitForChild("UpgradeTree")
 local Background = Main:WaitForChild("Background")
-local Upgrades = Background:WaitForChild("Upgrades")
-local HexTemplate = Upgrades:WaitForChild("HexTemplate")
+local UpgradesFrame = Background:WaitForChild("Upgrades")
+local HexTemplate = UpgradesFrame:WaitForChild("HexTemplate")
 HexTemplate.Visible = false
 
 local BACK_NODE_NAME = "__Back"
@@ -50,7 +51,7 @@ local function computeState(nodeName: string): NodeState
 		return cached
 	end
 
-	local node = UpgradeTree.Nodes[nodeName]
+	local node = Upgrades[nodeName]
 	if not node then
 		stateCache[nodeName] = "Invisible"
 		return "Invisible"
@@ -139,7 +140,7 @@ local function setVisualState(hex: GuiObject, options: {
 		if options.CostText then costLabel.Text = options.CostText end
 		local costIconLabel = costLabel:FindFirstChild("Icon") :: ImageLabel?
 		if costIconLabel then
-			local iconAsset = options.Currency and ICONS[options.Currency]
+			local iconAsset = options.Currency and ImageIds.Cash
 			if iconAsset then
 				costIconLabel.Image = iconAsset
 				costIconLabel.Visible = true
@@ -164,13 +165,13 @@ end
 
 local function onHexClicked(nodeName: string)
 	if nodeName == BACK_NODE_NAME then
-		local groupNode = currentGroup and UpgradeTree.Nodes[currentGroup]
+		local groupNode = currentGroup and Upgrades[currentGroup]
 		currentGroup = groupNode and groupNode.ParentGroup or nil
 		UpgradeTreeManager.Render()
 		return
 	end
 
-	local node = UpgradeTree.Nodes[nodeName]
+	local node = Upgrades[nodeName]
 	if not node then return end
 
 	local state = computeState(nodeName)
@@ -233,7 +234,7 @@ function UpgradeTreeManager.Render()
 		})
 	end
 
-	for nodeName, node in UpgradeTree.Nodes do
+	for nodeName, node in Upgrades do
 		if node.ParentGroup ~= currentGroup then continue end
 
 		local state = computeState(nodeName)
@@ -299,3 +300,6 @@ function UpgradeTreeManager.Init()
 end
 
 return UpgradeTreeManager
+]]
+
+return {}
