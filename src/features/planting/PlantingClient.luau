@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
 local Serialize = require(ReplicatedStorage.Source.Core.Utils.Serialize)
@@ -46,11 +47,7 @@ local function getGroundPosition(screenPos: Vector2): Vector3?
     return result and result.Position
 end
 
-local function getStageModel(models: Instance, name: string, stage: number?): Model?
-    if not stage then
-        return nil
-    end
-
+local function getStageModel(models: Instance, name: string, stage: number): Model?
     local container = models:FindFirstChild(name)
     local model = container and container:FindFirstChild(tostring(stage))
 
@@ -62,6 +59,10 @@ local function getStageModel(models: Instance, name: string, stage: number?): Mo
 end
 
 local function spawnStageModel(models: Instance, name: string, stage: number?, cframe: CFrame, scale: number): Model?
+    if not stage or stage < 1 then
+        return nil
+    end
+
     local model = getStageModel(models, name, stage)
     if not model then
         warn("Model is missing for " .. name .. " at stage " .. tostring(stage) .. "!")
@@ -116,17 +117,24 @@ local function clearCrop(self: PlantingClient, plantId: number, slot: number)
         crop:Destroy()
         crops[slot] = nil
     end
+
+    local infos = self.CropInfo[plantId]
+    if infos then
+        infos[slot] = nil
+    end
 end
 
 local function clearCrops(self: PlantingClient, plantId: number)
     local crops = self.Crops[plantId]
-    if not crops then return end
+    if crops then
+        for _, crop in crops do
+            crop:Destroy()
+        end
 
-    for _, crop in crops do
-        crop:Destroy()
+        self.Crops[plantId] = nil
     end
 
-    self.Crops[plantId] = nil
+    self.CropInfo[plantId] = nil
 end
 
 local function clearPlant(self: PlantingClient, id: number)
@@ -137,14 +145,22 @@ local function clearPlant(self: PlantingClient, id: number)
     end
 
     clearCrops(self, id)
+    self.PlantInfo[id] = nil
     self.Owners[id] = nil
 end
 
 local function createCrop(self: PlantingClient, plantId: number, crop: Definitions.Crop)
     local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime)
     local scale = PlantingUtils.getScale("Crop", crop.Name, crop.Weight)
-    local clone = spawnStageModel(CropModels, crop.Name, stage, Serialize.UnserializeCFrame(crop.CFrame), scale)
-    if not clone then return end
+    local cframe = Serialize.UnserializeCFrame(crop.CFrame)
+
+    local infos = self.CropInfo[plantId]
+    if not infos then
+        infos = {}
+        self.CropInfo[plantId] = infos
+    end
+
+    infos[crop.Slot] = {CFrame = cframe, Scale = scale}
 
     local crops = self.Crops[plantId]
     if not crops then
@@ -154,7 +170,11 @@ local function createCrop(self: PlantingClient, plantId: number, crop: Definitio
 
     if crops[crop.Slot] then
         crops[crop.Slot]:Destroy()
+        crops[crop.Slot] = nil
     end
+
+    local clone = spawnStageModel(CropModels, crop.Name, stage, cframe, scale)
+    if not clone then return end
 
     crops[crop.Slot] = clone
     addHarvestPrompt(self, plantId, crop.Slot, crop.Name, stage, clone)
@@ -166,11 +186,15 @@ local function createPlant(self: PlantingClient, plant: Definitions.PlantSnapsho
     local stage = PlantingUtils.getGrowthStageFromPlantTime(plant.Name, plant.PlantTime)
     local pos = Serialize.UnserializeVector3(plant.Pos)
     local scale = PlantingUtils.getScale("Plant", plant.Name, plant.Weight)
-    local clone = spawnStageModel(PlantModels, plant.Name, stage, CFrame.new(pos), scale)
-    if not clone then return end
+    local cframe = CFrame.new(pos)
 
-    self.Plants[plant.Id] = clone
+    self.PlantInfo[plant.Id] = {CFrame = cframe, Scale = scale}
     self.Owners[plant.Id] = plant.OwnerId
+
+    local clone = spawnStageModel(PlantModels, plant.Name, stage, cframe, scale)
+    if clone then
+        self.Plants[plant.Id] = clone
+    end
 
     for _, crop in plant.Crops or {} do
         createCrop(self, plant.Id, crop)
@@ -211,6 +235,7 @@ function PlantingClient.playAnimation(self: PlantingClient, pos: Vector3, seedNa
 
     local clone = model:Clone()
     local startPos = pos + Vector3.new(0, 5, 0)
+    local goalPos = pos - Vector3.new(0, 0.5, 0)
 
     for _, d in clone:GetDescendants() do
         if d:IsA("BasePart") then
@@ -223,56 +248,87 @@ function PlantingClient.playAnimation(self: PlantingClient, pos: Vector3, seedNa
     clone:PivotTo(CFrame.new(startPos))
     clone.Parent = PlantFolder
 
-    local posSpring = Spring.new(startPos, 0.8, 1)
-    posSpring.Target = pos
+    local posSpring = Spring.new(startPos)
+    posSpring.Damping = 0.8
+    posSpring.Frequency = 1
+    posSpring.Target = goalPos
 
-    local rotation = Vector3.new(
-        math.random() * math.pi,
-        math.random() * math.pi,
-        math.random() * math.pi
-    )
-
-    local rotSpring = Spring.new(rotation, 0.5, 0.6)
-    rotSpring.Target = Vector3.zero
+    local spinSpring = Spring.new(math.pi * 4)
+    spinSpring.Damping = 1
+    spinSpring.Frequency = 0.6
+    spinSpring.Target = 0
 
     local startTime = os.clock()
     local conn
-    conn = RunService.Heartbeat:Connect(function()
-        local rot = rotSpring.Position
+    conn = RunService.Heartbeat:Connect(function(dt)
+        posSpring:Update(dt)
+        spinSpring:Update(dt)
 
-        clone:PivotTo(
-            CFrame.new(posSpring.Position)
-                * CFrame.Angles(rot.X, rot.Y, rot.Z)
-        )
+        local yaw = spinSpring.Position
+        clone:PivotTo(CFrame.new(posSpring.Position) * CFrame.Angles(0, yaw, 0))
 
-        local settled = (posSpring.Position - posSpring.Target).Magnitude < 0.05 and rot.Magnitude < 0.05
+        local settled = (posSpring.Position - goalPos).Magnitude < 0.7 and math.abs(yaw) < 0.7
         if settled or os.clock() - startTime > 5 then
             conn:Disconnect()
             clone:Destroy()
+
+            local dirt = Instance.new("Part")
+            dirt.Anchored = true
+            dirt.Shape = Enum.PartType.Cylinder
+            dirt.Color = Color3.new(0.462745, 0.317647, 0.003922)
+            dirt.Size = Vector3.new(1, 1, 1)
+            dirt.CFrame = CFrame.new(pos - Vector3.new(0, 1, 0)) * CFrame.Angles(0, 0, math.rad(90))
+            dirt.Parent = workspace
+
+            local t = TweenService:Create(dirt, TweenInfo.new(1), {CFrame = CFrame.new(pos - Vector3.new(0, 0.35, 0)) * CFrame.Angles(0, 0, math.rad(90))})
+            t:Play()
+            t.Completed:Once(function()
+                task.delay(1, function()
+                    local t1 = TweenService:Create(dirt, TweenInfo.new(1), {Transparency = 1})
+                    t1:Play()
+                    t1.Completed:Once(function()
+                        dirt:Destroy()
+                    end)
+                end)
+            end)
         end
     end)
 end
 
 function PlantingClient.updatePlant(self: PlantingClient, id: number, plantName: string, stage: number)
-    local old = self.Plants[id]
-    if not old then return end
+    local info = self.PlantInfo[id]
+    if not info then return end
 
-    local clone = spawnStageModel(PlantModels, plantName, stage, old:GetPivot(), old:GetScale())
+    local clone = spawnStageModel(PlantModels, plantName, stage, info.CFrame, info.Scale)
     if not clone then return end
 
-    old:Destroy()
+    local old = self.Plants[id]
+    if old then
+        old:Destroy()
+    end
+
     self.Plants[id] = clone
 end
 
 function PlantingClient.updateCrop(self: PlantingClient, plantId: number, slot: number, cropName: string, stage: number)
-    local crops = self.Crops[plantId]
-    local old = crops and crops[slot]
-    if not old then return end
+    local infos = self.CropInfo[plantId]
+    local info = infos and infos[slot]
+    if not info then return end
 
-    local clone = spawnStageModel(CropModels, cropName, stage, old:GetPivot(), old:GetScale())
+    local clone = spawnStageModel(CropModels, cropName, stage, info.CFrame, info.Scale)
     if not clone then return end
 
-    old:Destroy()
+    local crops = self.Crops[plantId]
+    if not crops then
+        crops = {}
+        self.Crops[plantId] = crops
+    end
+
+    local old = crops[slot]
+    if old then
+        old:Destroy()
+    end
+
     crops[slot] = clone
     addHarvestPrompt(self, plantId, slot, cropName, stage, clone)
 end
@@ -284,7 +340,7 @@ function PlantingClient.spawnPlants(self: PlantingClient, plants: {Definitions.P
 end
 
 function PlantingClient.spawnCrop(self: PlantingClient, plantId: number, crop: Definitions.Crop)
-    if not self.Plants[plantId] then return end
+    if not self.PlantInfo[plantId] then return end
 
     createCrop(self, plantId, crop)
 end
@@ -301,18 +357,24 @@ end
 
 function PlantingClient.Init(self: PlantingClient)
     self.Plants = {}
+    self.PlantInfo = {}
     self.Crops = {}
+    self.CropInfo = {}
     self.Owners = {}
     self.Janitor = Janitor.new()
     self.Net = Networker.client.new("Planting", self)
     self.Net:fire("requestPlants")
 end
 
+type StageInfo = {CFrame: CFrame, Scale: number}
+
 type PlantingClient = typeof(PlantingClient) & {
     Net: typeof(Networker.client),
     Janitor: typeof(Janitor.new()),
     Plants: {[number]: Model},
+    PlantInfo: {[number]: StageInfo},
     Crops: {[number]: {[number]: Model}},
+    CropInfo: {[number]: {[number]: StageInfo}},
     Owners: {[number]: number}
 }
 

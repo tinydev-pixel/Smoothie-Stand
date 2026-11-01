@@ -99,7 +99,9 @@ function PlotServer.onPlrAdded(self: PlotServer, plr: Player)
     end
 
     plr.RespawnLocation = spawnPoint
-    plr.Character:PivotTo(spawnPoint.CFrame)
+    if plr.Character then
+        plr.Character:PivotTo(spawnPoint.CFrame)
+    end
 
     self:connectData(plr, profile)
 

@@ -5,7 +5,7 @@ return {
             Average = 5, 
             Max = 10
         }, 
-        GrowTime = 60,
+        GrowTime = 30,
         GrowthStages = 5,
         CropAmount = 1,
         Crop = "Basic"

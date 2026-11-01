@@ -11,7 +11,7 @@ local InventoryLoading = {}
 
 local function loadCrops(self: InventoryLoading, backpack: Backpack, crops: {Definitions.InventoryCrop})
     for _, crop in crops do
-        local tool = CropTools:FindFirstChild(crop)
+        local tool = CropTools:FindFirstChild(crop.Name)
         if tool then
             local clone = tool:Clone()
             PlantingUtils.scaleCrop(clone, "Crop", crop.Name, crop.Weight)
@@ -30,24 +30,34 @@ local function loadSeeds(self: InventoryLoading, backpack: Backpack, seeds: {str
 end
 
 function InventoryLoading.load(self: InventoryLoading, plr: Player)
-    local data = Data.Service:waitForData(plr)
+    local data = Data[plr] or Data.Service:waitForData(plr)
     local backpack = plr.Backpack or plr:WaitForChild("Backpack", 5)
     if not backpack then 
-        warn("Backpack failed to load for player" .. plr.UserId .. "!")
+        warn("Backpack failed to load for player " .. plr.UserId .. "!")
         return
     end
 
-    loadSeeds(self, backpack, data.inventory.seeds)
-    loadCrops(self, backpack, data.inventory.crops)
+    loadSeeds(self, backpack, data.inventory.seeds())
+    loadCrops(self, backpack, data.inventory.crops())
+end
+
+function InventoryLoading.onPlrAdded(self: InventoryLoading, plr: Player)
+    plr.CharacterAdded:Connect(function(char: Model)
+        self:load(plr)
+    end)
+
+    if plr.Character then
+        self:load(plr)
+    end
 end
 
 function InventoryLoading.Init(self: InventoryLoading)
     Players.PlayerAdded:Connect(function(plr: Player)
-        task.spawn(self.load, plr)
+        task.spawn(self.onPlrAdded, self, plr)
     end)
 
     for _, plr in Players:GetPlayers() do
-        task.spawn(self.load, plr)
+        task.spawn(self.onPlrAdded, self, plr)
     end
 end
 

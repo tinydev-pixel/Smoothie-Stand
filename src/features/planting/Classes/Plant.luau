@@ -120,11 +120,11 @@ local function spawnCrops(self: Plant)
             SpawnTime = workspace:GetServerTimeNow(),
             Weight = PlantingUtils.rollWeight(self.CropName, "Crop"),
             Slot = slot,
-            CFrame = Serialize.SerializeCFrame(origin * PlantingUtils.scaleCframe(offsets[slot], self.Scale))
+            CFrame = Serialize.SerializeCFrame(origin * PlantingUtils.scaleCFrame(offsets[slot], self.Scale))
         }
 
         self.Crops[slot] = crop
-        self.CropStages[slot] = 1
+        self.CropStages[slot] = 0
         self.Net:fireAll("spawnCrop", self.Id, crop)
     end
 
@@ -240,7 +240,7 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
     self.Scale = PlantingUtils.getScale("Plant", plantName, weight)
     self.Name = plantName
     self.PlantTime = plantTime
-    self.LastStage = stage or 1
+    self.LastStage = stage or 0
     self.FullyGrown = isFullyGrown(self, stage)
     self.Destroyed = false
     self.CropName = config.Crop or plantName

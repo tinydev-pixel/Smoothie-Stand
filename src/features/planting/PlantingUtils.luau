@@ -15,7 +15,7 @@ local function getGrowthStage(growTime: number, growthStages: number, startTime:
         progress = math.clamp((workspace:GetServerTimeNow() - startTime) / growTime, 0, 1)
     end
 
-    return math.min(math.floor(progress * growthStages) + 1, growthStages)
+    return math.min(math.floor(progress * growthStages), growthStages)
 end
 
 function PlantingUtils.rollWeight(name: string, kind: string): number
@@ -73,8 +73,10 @@ function PlantingUtils.getGrowthStageFromCropTime(cropName: string, spawnTime: n
     return getGrowthStage(config.GrowTime, config.GrowthStages, spawnTime)
 end
 
-function PlantingUtils.isSeed(name: string): boolean
-    if not name then return end
+function PlantingUtils.isSeed(name: string?): boolean
+    if not name then
+        return false
+    end
 
     local seedName = name:gsub(" Seed", "")
     return table.find(Seeds.Order, seedName) ~= nil
