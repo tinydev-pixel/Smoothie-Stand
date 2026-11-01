@@ -6,7 +6,6 @@ local UserInputService = game:GetService("UserInputService")
 local PlantingClient = require(ReplicatedStorage.Source.Features.Planting.PlantingClient)
 local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
 local ImageIds = require(ReplicatedStorage.Source.Game.Assets.ImageIds)
-local Seeds = require(ReplicatedStorage.Source.Game.Configurations.Seeds)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
@@ -59,7 +58,7 @@ local function isPointInside(gui: GuiObject, point: Vector2): boolean
     local pos = gui.AbsolutePosition
     local size = gui.AbsoluteSize
 
-    return point.X >= pos.X
+    return point.X >= pos.X 
         and point.X <= pos.X + size.X
         and point.Y >= pos.Y
         and point.Y <= pos.Y + size.Y

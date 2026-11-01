@@ -94,6 +94,10 @@
 
           "InventoryServer": {
             "$path": "src/features/inventory/InventoryServer.luau"
+          },
+
+          "InventoryLoading": {
+            "$path": "src/features/inventory/InventoryLoading.luau"
           }
         },
 

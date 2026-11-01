@@ -6,7 +6,7 @@ local template = {
 	gardenLevel = 1,
 	inventory = {
 		seeds = {"Basic"} :: {string},
-		crops = {} :: {}
+		crops = {} :: {Definitions.InventoryCrop}
 	},
 	plants = {} :: {Definitions.Plant}
 } 
