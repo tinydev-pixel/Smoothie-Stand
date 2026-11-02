@@ -17,7 +17,8 @@ export type Plant = {
 	PlantTime: number,
 	Weight: number,
 	Pos: {number},
-	Crops: {Crop}?
+	Crops: {Crop}?,
+	Space: string?
 }
 
 export type Crop = {
@@ -34,7 +35,7 @@ export type PlantSnapshot = {
 	Name: string,
 	PlantTime: number,
 	Weight: number,
-	Pos: {number},
+	CFrame: {number},
 	Crops: {Crop}
 }
 

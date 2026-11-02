@@ -77,10 +77,34 @@
           "Upgrades": {
             "$className": "Folder",
 
-            "UpgradesClient": {
-              "$path": "src/features/upgrades/UpgradesClient.luau"
+            "UpgradesServiceClient": {
+              "$path": "src/features/upgrades/UpgradesServiceClient.luau"
             }
+          },
+
+          "Buttons": {
+            "$className": "Folder",
+
+            "Classes": {
+              "$className": "Folder",
+
+              "ButtonClient": {
+                "$path": "src/features/buttons/classes/ButtonClient.luau"
+              }
+            },
+
+            "ButtonsServiceClient": {
+              "$path": "src/features/buttons/ButtonsServiceClient.luau"
+            }
+          },
+
+          "OfflineRewards": {
+          "$className": "Folder",
+
+          "OfflineRewardsServiceClient": {
+            "$path": "src/features/offline rewards/OfflineRewardsServiceClient.luau"
           }
+        }
         }
       }
     },
@@ -127,6 +151,22 @@
 
         "Upgrades": {
           "$className": "Folder"
+        },
+
+        "Buttons": {
+          "$className": "Folder",
+
+          "ButtonsServiceServer": {
+            "$path": "src/features/buttons/ButtonsServiceServer.luau"
+          }
+        },
+
+        "OfflineRewards": {
+          "$className": "Folder",
+
+          "OfflineRewardsServiceServer": {
+            "$path": "src/features/offline rewards/OfflineRewardsServiceServer.luau"
+          }
         }
       }
     },

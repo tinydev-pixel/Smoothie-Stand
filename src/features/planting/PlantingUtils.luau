@@ -18,6 +18,14 @@ local function getGrowthStage(growTime: number, growthStages: number, startTime:
     return math.min(math.floor(progress * growthStages), growthStages)
 end
 
+function PlantingUtils.toPlotPosition(plotCFrame: CFrame, worldPos: Vector3): Vector3
+    return plotCFrame:PointToObjectSpace(worldPos)
+end
+
+function PlantingUtils.toWorldCFrame(plotCFrame: CFrame, plotPos: Vector3): CFrame
+    return plotCFrame * CFrame.new(plotPos)
+end
+
 function PlantingUtils.rollWeight(name: string, kind: string): number
     local config = if kind == "Plant" then Plants[name] else Crops[name]
     assert(config, "Weight config is missing for " .. name .. "!")

@@ -3,12 +3,31 @@ local Definitions = require(script.Parent.Definitions)
 local Dataservice = require(ReplicatedStorage.Source.Packages.Dataservice)
 
 local template = {
+	cash = 0,
 	gardenLevel = 1,
 	inventory = {
 		seeds = {"Basic"} :: {string},
-		crops = {} :: {Definitions.InventoryCrop}
+		crops = {
+			{
+				Name = "Basic",
+				Weight = 5
+			},
+			{
+				Name = "Basic",
+				Weight = 3
+			}
+		} :: {Definitions.InventoryCrop}
 	},
-	plants = {} :: {Definitions.Plant}
+	plants = {} :: {Definitions.Plant},
+	storage = {
+		corn = 0,
+		cash = 0
+	},
+	upgrades = {
+		drainRate = 1,
+		cornStorage = 10
+	},
+	lastLogin = 0
 } 
 
 return Dataservice({

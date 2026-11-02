@@ -184,9 +184,8 @@ local function createPlant(self: PlantingClient, plant: Definitions.PlantSnapsho
     clearPlant(self, plant.Id)
 
     local stage = PlantingUtils.getGrowthStageFromPlantTime(plant.Name, plant.PlantTime)
-    local pos = Serialize.UnserializeVector3(plant.Pos)
     local scale = PlantingUtils.getScale("Plant", plant.Name, plant.Weight)
-    local cframe = CFrame.new(pos)
+    local cframe = Serialize.UnserializeCFrame(plant.CFrame)
 
     self.PlantInfo[plant.Id] = {CFrame = cframe, Scale = scale}
     self.Owners[plant.Id] = plant.OwnerId

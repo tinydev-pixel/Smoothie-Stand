@@ -20,6 +20,12 @@ local function isFullyGrown(self: Plant, stage: number?): boolean
     return stage ~= nil and stage >= self.Config.GrowthStages
 end
 
+local function toNetCrop(self: Plant, crop: Definitions.Crop): Definitions.Crop
+    local copy = table.clone(crop)
+    copy.CFrame = Serialize.SerializeCFrame(self.CFrame * Serialize.UnserializeCFrame(crop.CFrame))
+    return copy
+end
+
 local function getSpawnOffsets(plantName: string): {CFrame}
     local cached = spawnOffsets[plantName]
     if cached then return cached end
@@ -111,8 +117,6 @@ local function spawnCrops(self: Plant)
     local missing = math.min(self.Config.CropAmount - count, #free)
     if missing <= 0 then return end
 
-    local origin = CFrame.new(self.Pos)
-
     for _ = 1, missing do
         local slot = table.remove(free, math.random(#free))
         local crop: Definitions.Crop = {
@@ -120,12 +124,12 @@ local function spawnCrops(self: Plant)
             SpawnTime = workspace:GetServerTimeNow(),
             Weight = PlantingUtils.rollWeight(self.CropName, "Crop"),
             Slot = slot,
-            CFrame = Serialize.SerializeCFrame(origin * PlantingUtils.scaleCFrame(offsets[slot], self.Scale))
+            CFrame = Serialize.SerializeCFrame(PlantingUtils.scaleCFrame(offsets[slot], self.Scale))
         }
 
         self.Crops[slot] = crop
         self.CropStages[slot] = 0
-        self.Net:fireAll("spawnCrop", self.Id, crop)
+        self.Net:fireAll("spawnCrop", self.Id, toNetCrop(self, crop))
     end
 
     saveCrops(self)
@@ -146,7 +150,7 @@ function Plant.harvestCrop(self: Plant, plr: Player, slot: number)
     local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    local cropPos = Serialize.UnserializeCFrame(crop.CFrame).Position
+    local cropPos = (self.CFrame * Serialize.UnserializeCFrame(crop.CFrame)).Position
     if (root.Position - cropPos).Magnitude > MAX_HARVEST_DISTANCE then return end
 
     local data = Data[plr]
@@ -199,7 +203,7 @@ function Plant.snapshot(self: Plant): Definitions.PlantSnapshot
     local crops = {}
 
     for _, crop in self.Crops do
-        table.insert(crops, crop)
+        table.insert(crops, toNetCrop(self, crop))
     end
 
     return {
@@ -208,7 +212,7 @@ function Plant.snapshot(self: Plant): Definitions.PlantSnapshot
         Name = self.Name,
         PlantTime = self.PlantTime,
         Weight = self.Weight,
-        Pos = Serialize.SerializeVector3(self.Pos),
+        CFrame = Serialize.SerializeCFrame(self.CFrame),
         Crops = crops
     }
 end
@@ -223,7 +227,7 @@ function Plant.destroy(self: Plant)
     self.Saved = nil
 end
 
-function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, plantName: string, pos: Vector3, weight: number, plantTime: number, crops: {Definitions.Crop}?, saved: Definitions.Plant?)
+function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, plantName: string, cframe: CFrame, weight: number, plantTime: number, crops: {Definitions.Crop}?, saved: Definitions.Plant?)
     local config = Plants[plantName]
     assert(config, "Plant config is missing for " .. plantName .. "!")
 
@@ -235,7 +239,8 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
     self.Janitor = Janitor.new()
     self.Id = id
     self.Owner = farmer
-    self.Pos = pos
+    self.CFrame = cframe
+    self.Pos = cframe.Position
     self.Weight = weight
     self.Scale = PlantingUtils.getScale("Plant", plantName, weight)
     self.Name = plantName
@@ -253,13 +258,14 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
     end
 
     if crops and self.FullyGrown then
-        local slotCount = #getSpawnOffsets(plantName)
+        local offsets = getSpawnOffsets(plantName)
 
         for _, crop in crops do
             local cropStage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime)
-            local validSlot = type(crop.Slot) == "number" and crop.Slot >= 1 and crop.Slot <= slotCount
+            local validSlot = type(crop.Slot) == "number" and crop.Slot >= 1 and crop.Slot <= #offsets
 
             if cropStage and validSlot and not self.Crops[crop.Slot] then
+                crop.CFrame = Serialize.SerializeCFrame(PlantingUtils.scaleCFrame(offsets[crop.Slot], self.Scale))
                 self.Crops[crop.Slot] = crop
                 self.CropStages[crop.Slot] = cropStage
             end
@@ -275,6 +281,7 @@ type Plant = typeof(Plant) & {
     Janitor: typeof(Janitor.new()),
     Id: number,
     Owner: Player,
+    CFrame: CFrame,
     Pos: Vector3,
     Weight: number,
     Scale: number,

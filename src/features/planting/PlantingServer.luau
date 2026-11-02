@@ -29,10 +29,22 @@ local function isValidPosition(pos: Vector3): boolean
     return isFinite(pos.X) and isFinite(pos.Y) and isFinite(pos.Z)
 end
 
-local function createPlant(self: PlantingServer, plr: Player, data: Definitions.Plant, saved: Definitions.Plant?)
+local function migrateSave(saved: Definitions.Plant)
+    if saved.Space == "Plot" then return end
+
+    local worldPos = Serialize.UnserializeVector3(saved.Pos)
+    local nearest = PlotServer:getNearestPlotCFrame(worldPos)
+    if not nearest then return end
+
+    saved.Pos = Serialize.SerializeVector3(PlantingUtils.toPlotPosition(nearest, worldPos))
+    saved.Space = "Plot"
+end
+
+local function createPlant(self: PlantingServer, plr: Player, data: Definitions.Plant, saved: Definitions.Plant?, plotCFrame: CFrame)
     local id = generateId()
-    local pos = Serialize.UnserializeVector3(data.Pos)
-    local plant = Plant.new(self.Net, plr, id, data.Name, pos, data.Weight, data.PlantTime, data.Crops, saved)
+    local plotPos = Serialize.UnserializeVector3(data.Pos)
+    local cframe = PlantingUtils.toWorldCFrame(plotCFrame, plotPos)
+    local plant = Plant.new(self.Net, plr, id, data.Name, cframe, data.Weight, data.PlantTime, data.Crops, saved)
 
     self.Plants[id] = plant
 
@@ -65,10 +77,15 @@ local function initializePlants(self: PlantingServer, plr: Player)
     local profile = Data.Service:getProfile(plr)
     if not profile then return end
 
+    local plotCFrame = PlotServer:waitForPlotCFrame(plr)
+    if not plotCFrame then return end
+
     local snapshots = {}
 
     for _, saved in profile.Data.plants do
-        local ok, result = pcall(createPlant, self, plr, saved, saved)
+        migrateSave(saved)
+
+        local ok, result = pcall(createPlant, self, plr, saved, saved, plotCFrame)
 
         if ok then
             table.insert(snapshots, result:snapshot())
@@ -109,6 +126,9 @@ end
 function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
     if typeof(pos) ~= "Vector3" or not isValidPosition(pos) or not PlotServer:canPlant(plr, pos) then return end
 
+    local plotCFrame = PlotServer:getPlotCFrame(plr)
+    if not plotCFrame then return end
+
     local seed = GetEquippedTool(plr)
     if not seed then return end
 
@@ -131,10 +151,11 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
         Name = seedName,
         PlantTime = workspace:GetServerTimeNow(),
         Weight = PlantingUtils.rollWeight(seedName, "Plant"),
-        Pos = Serialize.SerializeVector3(pos)
+        Pos = Serialize.SerializeVector3(PlantingUtils.toPlotPosition(plotCFrame, pos)),
+        Space = "Plot"
     }
 
-    local ok, plant = pcall(createPlant, self, plr, plantData, plantData)
+    local ok, plant = pcall(createPlant, self, plr, plantData, plantData, plotCFrame)
     if not ok then
         warn("Failed to create plant: " .. tostring(plant))
         return

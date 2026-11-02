@@ -15,6 +15,8 @@ local function loadCrops(self: InventoryLoading, backpack: Backpack, crops: {Def
         if tool then
             local clone = tool:Clone()
             PlantingUtils.scaleCrop(clone, "Crop", crop.Name, crop.Weight)
+            clone:SetAttribute("IsCrop", true)
+            clone:SetAttribute("Weight", crop.Weight)
             clone.Parent = backpack
         end
     end

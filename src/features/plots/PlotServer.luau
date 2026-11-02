@@ -21,6 +21,13 @@ local function getGardenFolder(plotId: number): Folder?
     return main and main:FindFirstChild("Garden")
 end
 
+local function getPlotCFrame(plotId: number): CFrame?
+    local plot = Plots:FindFirstChild(tostring(plotId))
+    local main = plot and plot:FindFirstChild("Main")
+    local anchor = main and main:FindFirstChildWhichIsA("SpawnLocation")
+    return anchor and anchor.CFrame
+end
+
 local function updateGarden(plotId: number, gardenLevel: number)
     local gardenCont = getGardenFolder(plotId)
     local newGarden = Gardens:FindFirstChild(tostring(gardenLevel))
@@ -84,7 +91,7 @@ function PlotServer.onPlrAdded(self: PlotServer, plr: Player)
         return
     end
 
-    local id = tonumber(plot.Name) :: number
+    local id = tonumber(plot.Name)
     self.Plots[id] = plr
     self.PlotOf[plr] = id
 
@@ -106,6 +113,46 @@ function PlotServer.onPlrAdded(self: PlotServer, plr: Player)
     self:connectData(plr, profile)
 
     Signals.plotAssigned:Fire(plr, id)
+end
+
+function PlotServer.getPlotCFrame(self: PlotServer, plr: Player): CFrame?
+    local id = self.PlotOf[plr]
+    return id and getPlotCFrame(id)
+end
+
+function PlotServer.waitForPlotCFrame(self: PlotServer, plr: Player, timeout: number?): CFrame?
+    local deadline = os.clock() + (timeout or 15)
+
+    while plr.Parent == Players and os.clock() < deadline do
+        local cframe = self:getPlotCFrame(plr)
+        if cframe then
+            return cframe
+        end
+
+        task.wait(0.1)
+    end
+
+    return nil
+end
+
+function PlotServer.getNearestPlotCFrame(self: PlotServer, pos: Vector3): CFrame?
+    local best: CFrame? = nil
+    local bestDist = math.huge
+
+    for _, plot in Plots:GetChildren() do
+        local id = tonumber(plot.Name)
+        local cframe = id and getPlotCFrame(id)
+
+        if cframe then
+            local dist = (cframe.Position - pos).Magnitude
+
+            if dist < bestDist then
+                best, bestDist = cframe, dist
+            end
+        end
+    end
+
+    return best
 end
 
 function PlotServer.Init(self: PlotServer)

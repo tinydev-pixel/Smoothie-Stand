@@ -1,11 +1,9 @@
 --[[
-local UpgradeTreeManager = {}
+local UpgradesServiceClient = {}
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local GameStateReplica = require(ReplicatedStorage.Shared.Data.GameStateReplica)
-local Remotes = require(ReplicatedStorage.Shared.Remotes)
 local ImageIds = require(ReplicatedStorage.Source.Game.Assets.ImageIds)
 local Upgrades = require(ReplicatedStorage.Source.Game.Configurations.Upgrades)
 
@@ -286,7 +284,7 @@ function UpgradeTreeManager.Render()
 	end
 end
 
-function UpgradeTreeManager.Init()
+function UpgradesServiceClient.Init()
 	HexTemplate.Visible = false
 
 	task.spawn(function()
@@ -299,7 +297,6 @@ function UpgradeTreeManager.Init()
 	end)
 end
 
-return UpgradeTreeManager
+return UpgradesServiceClient
 ]]
-
 return {}
