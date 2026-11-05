@@ -38,6 +38,10 @@
             "$path": "src/game/configurations"
           },
 
+          "Utils": {
+            "$path": "src/game/utils"
+          },
+
           "Data": {
             "$path": "src/game/Data.luau"
           },
@@ -74,14 +78,6 @@
             }
           },
 
-          "Upgrades": {
-            "$className": "Folder",
-
-            "UpgradesServiceClient": {
-              "$path": "src/features/upgrades/UpgradesServiceClient.luau"
-            }
-          },
-
           "Buttons": {
             "$className": "Folder",
 
@@ -99,12 +95,32 @@
           },
 
           "OfflineRewards": {
-          "$className": "Folder",
+            "$className": "Folder",
 
-          "OfflineRewardsServiceClient": {
-            "$path": "src/features/offline rewards/OfflineRewardsServiceClient.luau"
+            "OfflineRewardsServiceClient": {
+              "$path": "src/features/offline rewards/OfflineRewardsServiceClient.luau"
+            }
+          },
+
+          "Rebirths": {
+            "$className": "Folder",
+
+            "RebirthsServiceClient": {
+              "$path": "src/features/rebirths/RebirthServiceClient.luau"
+            }
+          },
+
+          "Monetization": {
+            "$className": "Folder",
+
+            "MonetizationServiceClient": {
+              "$path": "src/features/monetization/MonetizationServiceClient.luau"
+            },
+
+            "MonetizationServiceUtils": {
+              "$path": "src/features/monetization/MonetizationServiceUtils.luau"
+            }
           }
-        }
         }
       }
     },
@@ -149,8 +165,12 @@
           }
         },
 
-        "Upgrades": {
-          "$className": "Folder"
+        "OfflineRewards": {
+          "$className": "Folder",
+
+          "OfflineRewardsServiceServer": {
+            "$path": "src/features/offline rewards/OfflineRewardsServiceServer.luau"
+          }
         },
 
         "Buttons": {
@@ -161,11 +181,31 @@
           }
         },
 
-        "OfflineRewards": {
+        "GroupRewards": {
           "$className": "Folder",
 
-          "OfflineRewardsServiceServer": {
-            "$path": "src/features/offline rewards/OfflineRewardsServiceServer.luau"
+          "GroupRewardsServiceServer": {
+            "$path": "src/features/group rewards/GroupRewardsServiceServer.luau"
+          }
+        },
+
+        "Rebirths": {
+          "$className": "Folder",
+
+          "RebirthsServiceServer": {
+            "$path": "src/features/rebirths/RebirthServiceServer.luau"
+          }
+        },
+
+        "Monetization": {
+          "$className": "Folder",
+
+          "MonetizationServiceServer": {
+            "$path": "src/features/monetization/MonetizationServiceServer.luau"
+          },
+
+          "Handlers": {
+            "$path": "src/features/monetization/handlers"
           }
         }
       }

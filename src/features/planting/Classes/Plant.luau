@@ -16,6 +16,14 @@ local spawnOffsets: {[string]: {CFrame}} = {}
 local Plant = {}
 Plant.__index = Plant
 
+local function getGrowthSpeed(plr: Player): number
+    if plr:GetAttribute("2xGrowthSpeed") then
+        return 2
+    end
+
+    return 1
+end
+
 local function isFullyGrown(self: Plant, stage: number?): boolean
     return stage ~= nil and stage >= self.Config.GrowthStages
 end
@@ -89,8 +97,10 @@ local function saveCrops(self: Plant)
 end
 
 local function updateCrops(self: Plant)
+    local speed = getGrowthSpeed(self.Owner)
+
     for slot, crop in self.Crops do
-        local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime)
+        local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime, speed)
 
         if stage and stage ~= self.CropStages[slot] then
             self.CropStages[slot] = stage
@@ -135,27 +145,19 @@ local function spawnCrops(self: Plant)
     saveCrops(self)
 end
 
-function Plant.harvestCrop(self: Plant, plr: Player, slot: number)
-    if self.Destroyed or plr ~= self.Owner then return end
-
+local function collectCrop(self: Plant, plr: Player, slot: number): boolean
     local crop = self.Crops[slot]
-    if not crop then return end
+    if not crop then return false end
 
     local config = Crops[crop.Name]
-    if not config then return end
+    if not config then return false end
 
-    local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime)
-    if not stage or stage < config.GrowthStages then return end
-
-    local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    local cropPos = (self.CFrame * Serialize.UnserializeCFrame(crop.CFrame)).Position
-    if (root.Position - cropPos).Magnitude > MAX_HARVEST_DISTANCE then return end
+    local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime, getGrowthSpeed(plr))
+    if not stage or stage < config.GrowthStages then return false end
 
     local data = Data[plr]
     local backpack = plr:FindFirstChildOfClass("Backpack")
-    if not data or not backpack then return end
+    if not data or not backpack then return false end
 
     self.Crops[slot] = nil
     self.CropStages[slot] = nil
@@ -169,13 +171,44 @@ function Plant.harvestCrop(self: Plant, plr: Player, slot: number)
     })
 
     giveCropTool(backpack, crop)
+
+    return true
+end
+
+local function autoHarvest(self: Plant)
+    if not self.Owner:GetAttribute("AutoHarvest") then return end
+
+    local slots = {}
+
+    for slot in self.Crops do
+        table.insert(slots, slot)
+    end
+
+    for _, slot in slots do
+        collectCrop(self, self.Owner, slot)
+    end
+end
+
+function Plant.harvestCrop(self: Plant, plr: Player, slot: number)
+    if self.Destroyed or plr ~= self.Owner then return end
+
+    local crop = self.Crops[slot]
+    if not crop then return end
+
+    local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local cropPos = (self.CFrame * Serialize.UnserializeCFrame(crop.CFrame)).Position
+    if (root.Position - cropPos).Magnitude > MAX_HARVEST_DISTANCE then return end
+
+    collectCrop(self, plr, slot)
 end
 
 function Plant.update(self: Plant)
     if self.Destroyed then return end
 
     if not self.FullyGrown then
-        local stage = PlantingUtils.getGrowthStageFromPlantTime(self.Name, self.PlantTime)
+        local stage = PlantingUtils.getGrowthStageFromPlantTime(self.Name, self.PlantTime, getGrowthSpeed(self.Owner))
         if not stage then return end
 
         if stage ~= self.LastStage then
@@ -191,7 +224,53 @@ function Plant.update(self: Plant)
     if not self.FullyGrown then return end
 
     updateCrops(self)
+    autoHarvest(self)
     spawnCrops(self)
+end
+
+function Plant.canGrow(self: Plant): boolean
+    if self.Destroyed then return false end
+
+    local speed = getGrowthSpeed(self.Owner)
+
+    if not self.FullyGrown then
+        local stage = PlantingUtils.getGrowthStageFromPlantTime(self.Name, self.PlantTime, speed)
+
+        if not isFullyGrown(self, stage) then
+            return true
+        end
+    end
+
+    for _, crop in self.Crops do
+        local config = Crops[crop.Name]
+        local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime, speed)
+
+        if config and stage and stage < config.GrowthStages then
+            return true
+        end
+    end
+
+    return false
+end
+
+function Plant.growNow(self: Plant)
+    if self.Destroyed then return end
+
+    self.PlantTime = 0
+
+    if self.Saved then
+        self.Saved.PlantTime = 0
+    end
+
+    self:update()
+
+    for _, crop in self.Crops do
+        crop.SpawnTime = 0
+    end
+
+    saveCrops(self)
+    updateCrops(self)
+    autoHarvest(self)
 end
 
 function Plant.setSaved(self: Plant, saved: Definitions.Plant)
@@ -232,7 +311,8 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
     assert(config, "Plant config is missing for " .. plantName .. "!")
 
     local self: Plant = setmetatable({}, Plant)
-    local stage = PlantingUtils.getGrowthStageFromPlantTime(plantName, plantTime)
+    local speed = getGrowthSpeed(farmer)
+    local stage = PlantingUtils.getGrowthStageFromPlantTime(plantName, plantTime, speed)
 
     self.Config = config
     self.Net = net
@@ -261,7 +341,7 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
         local offsets = getSpawnOffsets(plantName)
 
         for _, crop in crops do
-            local cropStage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime)
+            local cropStage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime, speed)
             local validSlot = type(crop.Slot) == "number" and crop.Slot >= 1 and crop.Slot <= #offsets
 
             if cropStage and validSlot and not self.Crops[crop.Slot] then

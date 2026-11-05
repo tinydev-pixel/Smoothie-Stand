@@ -7,7 +7,6 @@ local GetEquippedTool = require(ReplicatedStorage.Source.Core.Platform.GetEquipp
 local Serialize = require(ReplicatedStorage.Source.Core.Utils.Serialize)
 local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
 local Plants = require(ReplicatedStorage.Source.Game.Configurations.Plants)
-local Seeds = require(ReplicatedStorage.Source.Game.Configurations.Seeds)
 local Data = require(ReplicatedStorage.Source.Game.Data).server
 local Definitions = require(ReplicatedStorage.Source.Game.Definitions)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
@@ -51,22 +50,6 @@ local function createPlant(self: PlantingServer, plr: Player, data: Definitions.
     return plant
 end
 
-local function cleanupPlants(self: PlantingServer, plr: Player)
-    local removed = {}
-
-    for id, plant in self.Plants do
-        if plant.Owner == plr then
-            plant:destroy()
-            self.Plants[id] = nil
-            table.insert(removed, id)
-        end
-    end
-
-    if #removed > 0 then
-        self.Net:fireAll("deletePlants", removed)
-    end
-end
-
 local function initializePlants(self: PlantingServer, plr: Player)
     if self.Loaded[plr] then return end
     self.Loaded[plr] = true
@@ -96,6 +79,22 @@ local function initializePlants(self: PlantingServer, plr: Player)
 
     if #snapshots > 0 then
         self.Net:fireAll("spawnPlants", snapshots)
+    end
+end
+
+function PlantingServer.cleanupPlants(self: PlantingServer, plr: Player)
+    local removed = {}
+
+    for id, plant in self.Plants do
+        if plant.Owner == plr then
+            plant:destroy()
+            self.Plants[id] = nil
+            table.insert(removed, id)
+        end
+    end
+
+    if #removed > 0 then
+        self.Net:fireAll("deletePlants", removed)
     end
 end
 
@@ -169,6 +168,28 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
     self.Net:fire(plr, "playAnimation", pos, seedName)
 end
 
+function PlantingServer.canGrowAll(self: PlantingServer, plr: Player): boolean
+    for _, plant in self.Plants do
+        if plant.Owner == plr and plant:canGrow() then
+            return true
+        end
+    end
+
+    return false
+end
+
+function PlantingServer.growAll(self: PlantingServer, plr: Player): boolean
+    if not self:canGrowAll(plr) then return false end
+
+    for _, plant in self.Plants do
+        if plant.Owner == plr then
+            plant:growNow()
+        end
+    end
+
+    return true
+end
+
 function PlantingServer.Init(self: PlantingServer)
     self.Net = Networker.server.new("Planting", self, {self.plant, self.requestPlants, self.harvestCrop})
     self.Plants = {}
@@ -182,7 +203,7 @@ function PlantingServer.Init(self: PlantingServer)
     Players.PlayerRemoving:Connect(function(plr: Player)
         self.Loaded[plr] = nil
         self.Synced[plr] = nil
-        cleanupPlants(self, plr)
+        PlantingServer.cleanupPlants(self, plr)
     end)
 
     for _, plr in Players:GetPlayers() do

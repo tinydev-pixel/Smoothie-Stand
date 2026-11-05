@@ -1,11 +1,14 @@
+local GroupService = game:GetService("GroupService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Flash = require(ReplicatedStorage.Source.Core.Platform.Flash)
+local Info = require(ReplicatedStorage.Source.Game.Assets.Info)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 local Spring = require(ReplicatedStorage.Source.Packages.Spring)
 
-local cooldown = 1.5
+local cooldown = 0.5
 
 local ButtonClient = {}
 ButtonClient.__index = ButtonClient
@@ -70,6 +73,13 @@ function ButtonClient.new(btn: Model, net: typeof(Networker.client), btnType: st
             task.delay(cooldown, function()
                 self.debounce = false
             end)
+
+            if btnType == "GroupRewards" then
+                if not Players.LocalPlayer:IsInGroupAsync(Info.groupId) then
+                    GroupService:PromptJoinAsync(Info.groupId) 
+                    return
+                end
+            end
 
             self.net:fire("btnActivated", self.btnType)
             self:onTouched()

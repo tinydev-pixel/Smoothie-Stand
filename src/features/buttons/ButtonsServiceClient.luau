@@ -5,6 +5,7 @@ local Flash = require(ReplicatedStorage.Source.Core.Platform.Flash)
 local PlaySoundInSpace = require(ReplicatedStorage.Source.Core.Platform.PlaySoundInSpace)
 local ButtonClient = require(ReplicatedStorage.Source.Features.Buttons.Classes.ButtonClient)
 local SoundIds = require(ReplicatedStorage.Source.Game.Assets.SoundIds)
+local DrainRateUpgrades = require(ReplicatedStorage.Source.Game.Configurations.DrainRateUpgrades)
 local FormatNumber = require(ReplicatedStorage.Source.Packages.FormatNumber)
 local Data = require(ReplicatedStorage.Source.Game.Data).client
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
@@ -31,6 +32,14 @@ end
 
 local function getBtn(self: ButtonsServiceClient, btnType: string): Part?
     return self.btns[btnType] and self.btns[btnType].btn
+end
+
+local function updateBtnColor(btn: Part, value: number)
+    if value == 0 then
+        btn.Color = redColor
+    else
+        btn.Color = greenColor
+    end
 end
 
 local function spawnCar(self: ButtonsServiceClient)
@@ -105,22 +114,49 @@ end
 local function updateMoneyStorage(self: ButtonsServiceClient, cashStorage: number)
     local btn = getBtn(self, "ClaimMoney")
     if btn and btn.Parent then
-        local gui = btn.Parent:FindFirstChildWhichIsA("BillboardGui")
-        local label = gui and gui:FindFirstChild("CashAmount")
+        local gui = btn.Parent:FindFirstChildWhichIsA("BillboardGui") or btn.Parent:WaitForChild("BillboardGui", 5)
+        local label = gui and (gui:FindFirstChild("CashAmount") or gui:WaitForChild("CashAmount", 5))
         if label then
             label.Text = "$" .. FormatNumber.Simple.FormatCompact(cashStorage)
         end
 
-        if cashStorage == 0 then
-            btn.Color = redColor
-        else
-            btn.Color = greenColor
+        updateBtnColor(btn, cashStorage)
 
-            if not self.carSpawned and self.carPart then
-                spawnCar(self)
-            end
+        if cashStorage ~= 0 and not self.carSpawned and self.carPart then
+            spawnCar(self)
         end
     end
+end
+
+local function updateGroupRewards(self: ButtonsServiceClient, groupRewards: number)
+    local btn = getBtn(self, "GroupRewards")
+    if btn and btn.Parent then
+        local gui = btn.Parent:FindFirstChildWhichIsA("BillboardGui") or btn.Parent:WaitForChild("BillboardGui", 5)
+        local label = gui and (gui:FindFirstChild("CashAmount") or gui:WaitForChild("CashAmount", 5))
+        if label then
+            label.Text = "$" .. FormatNumber.Simple.FormatCompact(groupRewards)
+        end
+
+        updateBtnColor(btn, groupRewards)
+    end
+end
+
+local function updateDrainRate(self: ButtonsServiceClient, drainRate: number, cash: number)
+    local btn = getBtn(self, "DrainRate")
+    if not btn or not btn.Parent then return end
+
+    local gui = btn.Parent:FindFirstChildWhichIsA("BillboardGui") or btn.Parent:WaitForChild("BillboardGui", 5)
+    if not gui then return end
+
+    local priceLabel = gui:FindFirstChild("Price") or gui:WaitForChild("Price", 5)
+    local rateLabel = gui:FindFirstChild("Label") or gui:WaitForChild("Label", 5)
+    if not priceLabel or not rateLabel then return end
+
+    local nextUpg = DrainRateUpgrades.getNextUpgrade(drainRate)
+    priceLabel.Text = "$" .. FormatNumber.Simple.FormatCompact(nextUpg.Price)
+    rateLabel.Text = "-> " .. FormatNumber.Simple.FormatCompact(nextUpg.Rate) .. "/sec"
+
+    updateBtnColor(btn, (cash >= nextUpg.Price) and 1 or 0)
 end
 
 function ButtonsServiceClient.onPlotAssigned(self: ButtonsServiceClient, plotId: number)
@@ -137,10 +173,16 @@ function ButtonsServiceClient.onPlotAssigned(self: ButtonsServiceClient, plotId:
 
     self.sign = sign
     self.carPart = carPart
+
+    task.spawn(updateDrainRate, self, Data.upgrades.drainRate(), Data.cash())
+    task.spawn(updateGroupRewards, self, Data.groupRewards())
+    task.spawn(updateMoneyStorage, self, Data.storage.cash())
 end
 
 function ButtonsServiceClient.updateSign(self: ButtonsServiceClient, cornStorage: number, drainRate: number)
-    if not self.sign then repeat task.wait() until self.sign end
+    local startTime = os.clock()
+    local waitTime = 5
+    if not self.sign then repeat task.wait() until self.sign or os.clock() - startTime > waitTime end
 
     self.sign.CornAmount.Text = FormatNumber.Simple.FormatCompact(cornStorage)
     self.sign.AmountPerSecond.Text = FormatNumber.Simple.FormatCompact(drainRate) .. " per second"
@@ -155,14 +197,22 @@ function ButtonsServiceClient.Init(self: ButtonsServiceClient)
     end)
 
     Data.upgrades.drainRate.Changed(function(drainRate: number, a1: number, a2: string?)
-        self:updateSign(Data.storage.corn(), drainRate)
+        updateDrainRate(self, drainRate, Data.cash())
+        task.spawn(self.updateSign, self, Data.storage.corn(), Data.upgrades.drainRate())
     end)
 
     Data.storage.cash.Changed(function(cashStorage: number, a1: number, a2: string?)
         updateMoneyStorage(self, cashStorage)
     end)
 
-    task.spawn(updateMoneyStorage, self, Data.storage.cash())
+    Data.groupRewards.Changed(function(groupRewards: number, a1: number, a2: string?)
+        updateGroupRewards(self, groupRewards)
+    end)
+
+    Data.cash.Changed(function(cash: number, a1: number, a2: string?)
+        updateDrainRate(self, Data.upgrades.drainRate(), cash)
+    end)
+
     task.spawn(self.updateSign, self, Data.storage.corn(), Data.upgrades.drainRate())
 end
 

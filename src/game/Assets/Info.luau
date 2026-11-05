@@ -1,3 +1,4 @@
 return {
-    placeId = 0
+    placeId = 0,
+    groupId = 356001468
 }

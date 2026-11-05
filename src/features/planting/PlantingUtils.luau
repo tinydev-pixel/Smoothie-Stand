@@ -8,11 +8,12 @@ local MAX_SCALE = 2
 
 local PlantingUtils = {}
 
-local function getGrowthStage(growTime: number, growthStages: number, startTime: number): number
+local function getGrowthStage(growTime: number, growthStages: number, startTime: number, speed: number?): number
     local progress = 1
 
     if growTime > 0 then
-        progress = math.clamp((workspace:GetServerTimeNow() - startTime) / growTime, 0, 1)
+        local elapsed = (workspace:GetServerTimeNow() - startTime) * (speed or 1)
+        progress = math.clamp(elapsed / growTime, 0, 1)
     end
 
     return math.min(math.floor(progress * growthStages), growthStages)
@@ -63,22 +64,22 @@ function PlantingUtils.getScale(kind: string, name: string, weight: number): num
     return math.clamp((weight / average) ^ (1 / 3), MIN_SCALE, MAX_SCALE)
 end
 
-function PlantingUtils.getGrowthStageFromPlantTime(plantName: string, plantTime: number): number?
+function PlantingUtils.getGrowthStageFromPlantTime(plantName: string, plantTime: number, speed: number?): number?
     local config = Plants[plantName]
     if not config then
         return nil
     end
 
-    return getGrowthStage(config.GrowTime, config.GrowthStages, plantTime)
+    return getGrowthStage(config.GrowTime, config.GrowthStages, plantTime, speed)
 end
 
-function PlantingUtils.getGrowthStageFromCropTime(cropName: string, spawnTime: number): number?
+function PlantingUtils.getGrowthStageFromCropTime(cropName: string, spawnTime: number, speed: number?): number?
     local config = Crops[cropName]
     if not config then
         return nil
     end
 
-    return getGrowthStage(config.GrowTime, config.GrowthStages, spawnTime)
+    return getGrowthStage(config.GrowTime, config.GrowthStages, spawnTime, speed)
 end
 
 function PlantingUtils.isSeed(name: string?): boolean

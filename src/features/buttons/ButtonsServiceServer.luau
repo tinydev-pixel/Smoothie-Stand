@@ -2,8 +2,12 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Data = require(ReplicatedStorage.Source.Game.Data).server
+local DrainRateUpgrades = require(ReplicatedStorage.Source.Game.Configurations.DrainRateUpgrades)
+local GroupRewardsServiceServer = require(ServerScriptService.Features.GroupRewards.GroupRewardsServiceServer)
 local OfflineRewardsServiceServer = require(ServerScriptService.Features.OfflineRewards.OfflineRewardsServiceServer)
 local Signals = require(ReplicatedStorage.Source.Game.Signals)
+local CalculateCash = require(ReplicatedStorage.Source.Game.Utils.CalculateCash)
+local OwnsGamepass = require(ReplicatedStorage.Source.Game.Utils.OwnsGamepass)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
@@ -39,35 +43,40 @@ local function insertCorn(plr: Player)
     local data = Data[plr]
     if not data then return end
 
-    local spaceLeft = data.upgrades.cornStorage() - data.storage.corn()
-    if spaceLeft <= 0 then return end
-
     local crops = data.inventory.crops()
-    local picked = {}
-    local total = 0
+    if #crops == 0 then return end
 
+    local doubleTheCorn = OwnsGamepass(plr, "2xCorn")
+
+    local toInsert = {}
     for i, crop in crops do
-        if total + crop.Weight <= spaceLeft then
-            total += crop.Weight
-            table.insert(picked, i)
-        end
+        table.insert(toInsert, {index = i, name = crop.Name, weight = crop.Weight})
     end
 
-    for n = #picked, 1, -1 do
-        local i = picked[n]
-        local crop = crops[i]
-        local name = crop.Name
-        local weight = crop.Weight
+    for n = #toInsert, 1, -1 do
+        local entry = toInsert[n]
 
-        data.inventory.crops.Remove(i)
+        data.inventory.crops.Remove(entry.index)
         data.storage.corn(function(corn)
-            return corn + weight
+            return corn + entry.weight * (doubleTheCorn and 2 or 1)
         end)
 
-        if not destroyCropTool(plr:FindFirstChildOfClass("Backpack"), name, weight) then
-            destroyCropTool(plr.Character, name, weight)
+        if not destroyCropTool(plr:FindFirstChildOfClass("Backpack"), entry.name, entry.weight) then
+            destroyCropTool(plr.Character, entry.name, entry.weight)
         end
     end
+end
+
+local function upgradeDrainRate(plr: Player)
+    local rate = Data[plr].upgrades.drainRate()
+    local cash = Data[plr].cash()
+    local nextUpg = DrainRateUpgrades.getNextUpgrade(rate)
+    if cash < nextUpg.Price then return end
+
+    Data[plr].upgrades.drainRate(nextUpg.Rate)
+    Data[plr].cash(function(oldAmt)
+        return oldAmt - nextUpg.Price
+    end)
 end
 
 function ButtonsServiceServer.btnActivated(self: ButtonsServiceServer, plr: Player, btnType: string)
@@ -81,38 +90,48 @@ function ButtonsServiceServer.btnActivated(self: ButtonsServiceServer, plr: Play
         claimMoney(plr)
     elseif btnType == "InsertCorn" then
         insertCorn(plr)
+    elseif btnType == "GroupRewards" then
+        GroupRewardsServiceServer:claim(plr)
+    elseif btnType == "DrainRate" then
+        upgradeDrainRate(plr)
+    end
+end
+
+function ButtonsServiceServer.process(self: ButtonsServiceServer, plr: Player, toDrain: number?)
+    local data = Data[plr]
+    local cornStorage = data and data.storage.corn() or 0
+
+    if OfflineRewardsServiceServer:plrHasClaimed(plr) and data and cornStorage > 0 then
+        local drained = toDrain or math.min(cornStorage, data.upgrades.drainRate())
+        local totalCash = CalculateCash(plr, data.rebirths(), drained)
+
+        if drained > 0 then
+            data.storage.corn(function(corn)
+                return math.max(corn - drained, 0)
+            end)
+
+            data.storage.cash(function(cash)
+                return cash + totalCash
+            end)
+        end
     end
 end
 
 function ButtonsServiceServer.onPlrRemoving(self: ButtonsServiceServer, plr: Player)
     self.janitor:Remove(plr.UserId)
     OfflineRewardsServiceServer:onPlrRemoving(plr)
+    GroupRewardsServiceServer:onPlrRemoving(plr)
 end
 
 function ButtonsServiceServer.onPlrAdded(self: ButtonsServiceServer, plr: Player)
     Data.Service:waitForData(plr)
     OfflineRewardsServiceServer:onPlrAdded(plr)
+    GroupRewardsServiceServer:onPlrAdded(plr)
 
     self.janitor:Add(
         task.spawn(function()            
             while plr.Parent == Players do
-                local data = Data[plr]
-                local cornStorage = data and data.storage.corn() or 0
-
-                if OfflineRewardsServiceServer:plrHasClaimed(plr) and data and cornStorage > 0 then
-                    local drained = math.min(cornStorage, data.upgrades.drainRate())
-
-                    if drained > 0 then
-                        data.storage.corn(function(corn)
-                            return corn - drained
-                        end)
-
-                        data.storage.cash(function(cash)
-                            return cash + drained
-                        end)
-                    end
-                end
-
+                self:process(plr)
                 task.wait(1)
             end
         end), true, plr.UserId

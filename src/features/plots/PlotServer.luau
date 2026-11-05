@@ -30,7 +30,7 @@ end
 
 local function updateGarden(plotId: number, gardenLevel: number)
     local gardenCont = getGardenFolder(plotId)
-    local newGarden = Gardens:FindFirstChild(tostring(gardenLevel))
+    local newGarden = Gardens:FindFirstChild(tostring(plotId)):FindFirstChild(tostring(gardenLevel))
     if not (gardenCont and newGarden) then
         warn(("updateGarden failed: plot %d, level %d"):format(plotId, gardenLevel))
         return

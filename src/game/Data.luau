@@ -5,6 +5,7 @@ local Dataservice = require(ReplicatedStorage.Source.Packages.Dataservice)
 local template = {
 	cash = 0,
 	gardenLevel = 1,
+	rebirths = 0,
 	inventory = {
 		seeds = {"Basic"} :: {string},
 		crops = {
@@ -24,10 +25,10 @@ local template = {
 		cash = 0
 	},
 	upgrades = {
-		drainRate = 1,
-		cornStorage = 10
+		drainRate = 1
 	},
-	lastLogin = 0
+	lastLogin = 0,
+	groupRewards = 0
 } 
 
 return Dataservice({
