@@ -3,7 +3,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Flash = require(ReplicatedStorage.Source.Core.Platform.Flash)
+local PlaySoundInSpace = require(ReplicatedStorage.Source.Core.Platform.PlaySoundInSpace)
 local Info = require(ReplicatedStorage.Source.Game.Assets.Info)
+local SoundIds = require(ReplicatedStorage.Source.Game.Assets.SoundIds)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 local Spring = require(ReplicatedStorage.Source.Packages.Spring)
@@ -15,6 +17,7 @@ ButtonClient.__index = ButtonClient
 
 function ButtonClient.onTouched(self: ButtonClient)
     Flash.play(self.btn)
+    PlaySoundInSpace(SoundIds.Button, self.btn)
 
     local spring = Spring.new(self.startPos)
     spring.Damping = 0.8

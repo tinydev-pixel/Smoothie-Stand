@@ -2,6 +2,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local Notifications = require(ReplicatedStorage.Source.Core.Utils.Notifications)
 local PlantingServer = require(ServerScriptService.Features.Planting.PlantingServer)
 local RebirthsServiceServer = require(ServerScriptService.Features.Rebirths.RebirthsServiceServer)
 local MonetizationServiceUtils = require(ReplicatedStorage.Source.Features.Monetization.MonetizationServiceUtils)
@@ -13,7 +14,11 @@ local Handlers = script.Parent.Handlers
 
 local MonetizationServiceServer = {}
 
-local function checkConditions(plr: Player, name: string): boolean | string?
+local function notifyOnPurchaseResults(plr: Player, wasPurchased: boolean)
+    Notifications.Show(plr, {message = (wasPurchased and "Thank you for your purchase!" or "Purchase has not been processed!"), color = (wasPurchased and Color3.new(0, 1, 0) or Color3.new(1, 0, 0))})
+end
+
+local function checkConditions(plr: Player, name: string): (boolean, string?)
     if name == "SkipRebirth" then
         return RebirthsServiceServer:canRebirth(plr), "You have reached maximum rebirths!"
     elseif name == "FinishAll" then
@@ -22,11 +27,17 @@ local function checkConditions(plr: Player, name: string): boolean | string?
         return PlantingServer:canGrowAll(plr), "You have nothing to currently grow!"
     end
 
-    return false
+    return true, nil
 end
 
 local function setAsOwned(self: MonetizationServiceServer, plr: Player, name: string)
-    table.insert(self.ownedGamepasses[plr.UserId], name)
+    local owned = self.ownedGamepasses[plr.UserId]
+    if not owned then return end
+
+    if not table.find(owned, name) then
+        table.insert(owned, name)
+    end
+
     plr:SetAttribute(name, true)
 end
 
@@ -35,7 +46,13 @@ function MonetizationServiceServer.onPlrRemoving(self: MonetizationServiceServer
 end
 
 function MonetizationServiceServer.onPlrAdded(self: MonetizationServiceServer, plr: Player)
+    if self.ownedGamepasses[plr.UserId] then return end
+    self.ownedGamepasses[plr.UserId] = {}
+
+    local pending = 0
+
     for name, id in GamepassIds do
+        pending += 1
         task.spawn(function()
             local s, r = pcall(function()
                 return MarketplaceService:UserOwnsGamePassAsync(plr.UserId, id)
@@ -44,13 +61,23 @@ function MonetizationServiceServer.onPlrAdded(self: MonetizationServiceServer, p
             if s and r then
                 setAsOwned(self, plr, name)
             end
+
+            pending -= 1
         end)
     end
 
-    self.net:fire(plr, "updateOwnedGamepasses", self.ownedGamepasses[plr.UserId])
+    while pending > 0 and self.ownedGamepasses[plr.UserId] do
+        task.wait()
+    end
+
+    if self.ownedGamepasses[plr.UserId] then
+        self.net:fire(plr, "updateOwnedGamepasses", self.ownedGamepasses[plr.UserId])
+    end
 end
 
-function MonetizationServiceServer.purchasedGamepass(self, plr: Player, name: string)
+function MonetizationServiceServer.purchasedGamepass(self: MonetizationServiceServer, plr: Player, name: string)
+    if not self.ownedGamepasses[plr.UserId] then return end
+
     setAsOwned(self, plr, name)
     self.net:fire(plr, "updateOwnedGamepasses", self.ownedGamepasses[plr.UserId])
 end
@@ -64,18 +91,22 @@ function MonetizationServiceServer.processReceipt(self: MonetizationServiceServe
     local productId = receiptInfo.ProductId
     local productName = MonetizationServiceUtils.getNameFromId(productId)
     if not productName then
-        warn("Configuration is not set up for product or gamepass " .. productId .. "!")
+        warn("Configuration is not set up for product " .. tostring(productId) .. "!")
         return Enum.ProductPurchaseDecision.NotProcessedYet
-    end
-
-    local _, type = MonetizationServiceUtils.getInfoFromName(productName)
-    if type == "GamePass" then
-        self:purchasedGamepass(plr, productName)
     end
 
     local handler = Handlers:FindFirstChild(productName)
     if handler then
-        return require(handler)(plr)
+        local s, result = pcall(function()
+            return require(handler)(plr)
+        end)
+
+        if not s then
+            warn(result)
+            return Enum.ProductPurchaseDecision.NotProcessedYet
+        end
+
+        return result or Enum.ProductPurchaseDecision.PurchaseGranted
     end
 
     return Enum.ProductPurchaseDecision.PurchaseGranted
@@ -85,9 +116,14 @@ function MonetizationServiceServer.requestPurchase(self: MonetizationServiceServ
     local id, type = MonetizationServiceUtils.getInfoFromName(name)
     if not id or not type then return end
 
-    local s, msg = checkConditions(plr, name) 
+    if type == "GamePass" then
+        local owned = self.ownedGamepasses[plr.UserId]
+        if owned and table.find(owned, name) then return end
+    end
+
+    local s, msg = checkConditions(plr, name)
     if not s then
-        -- Notification using msg 
+        Notifications.Show(plr, {message = msg, color = Color3.new(1, 0, 0)})
         return
     end
 
@@ -106,14 +142,28 @@ function MonetizationServiceServer.Init(self: MonetizationServiceServer)
         task.spawn(self.onPlrAdded, self, plr)
     end)
 
-    Players.PlayerRemoving:Connect(function(plr: Player, a1: Enum.PlayerExitReason)
-        task.spawn(self.onPlrRemoving, self, plr)
+    Players.PlayerRemoving:Connect(function(plr: Player)
+        self:onPlrRemoving(plr)
     end)
 
-    task.spawn(function()
-        for _, plr in Players:GetPlayers() do
-            task.spawn(self.onPlrAdded, self, plr)
+    for _, plr in Players:GetPlayers() do
+        task.spawn(self.onPlrAdded, self, plr)
+    end
+
+    MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(plr: Player, gamePassId: number, wasPurchased: boolean)
+        notifyOnPurchaseResults(plr, wasPurchased)
+
+        local name = MonetizationServiceUtils.getNameFromId(gamePassId)
+        if name and wasPurchased then
+            self:purchasedGamepass(plr, name)
         end
+    end)
+
+    MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId: number, productId: number, wasPurchased: boolean)
+        local plr = Players:GetPlayerByUserId(userId)
+        if not plr then return end
+
+        notifyOnPurchaseResults(plr, wasPurchased)
     end)
 
     MarketplaceService.ProcessReceipt = function(receiptInfo)

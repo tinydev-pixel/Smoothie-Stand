@@ -17,14 +17,13 @@ export type Plant = {
 	PlantTime: number,
 	Weight: number,
 	Pos: {number},
-	Crops: {Crop}?,
+	Fruits: {Fruit}?,
 	Space: string?
 }
 
-export type Crop = {
+export type Fruit = {
 	Name: string,
 	SpawnTime: number,
-	Weight: number,
 	Slot: number,
 	CFrame: {number}
 }
@@ -36,12 +35,7 @@ export type PlantSnapshot = {
 	PlantTime: number,
 	Weight: number,
 	CFrame: {number},
-	Crops: {Crop}
-}
-
-export type InventoryCrop = {
-	Name: string,
-	Weight: number
+	Fruits: {Fruit}
 }
 
 return {}

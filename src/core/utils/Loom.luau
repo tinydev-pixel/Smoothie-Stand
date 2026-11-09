@@ -3,7 +3,7 @@
 	Loom
 	Client-side utility for managing UI frames so that only one is open
 	at a time, with an automatic background blur and a reusable hover
-	animation helper.
+	and press animation helper.
 
 	Meant to be required from LocalScripts (put it somewhere shared like
 	ReplicatedStorage.Modules or StarterPlayerScripts).
@@ -18,17 +18,21 @@
 		Loom.Hover(myButton, {
 			HoverScale = 1.05,
 			IdleScale = 1,
+			PressScale = 0.9,
 		})
 ]]
 
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
 
 export type HoverOptions = {
 	HoverScale: number?,
 	IdleScale: number?,
+	PressScale: number?,
 	HoverColor: Color3?,
 	IdleColor: Color3?,
+	PressColor: Color3?,
 	TweenInfo: TweenInfo?,
 }
 
@@ -109,6 +113,11 @@ local function animateOpen(frame: GuiObject)
 	local scale = getScale(frame)
 	scale.Scale = 0
 	playTween(scale, FRAME_TWEEN_INFO, {Scale = 1})
+end
+
+local function isPressInput(input: InputObject): boolean
+	return input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
 end
 
 --[[
@@ -192,41 +201,98 @@ function Loom.GetCurrentFrame(): GuiObject?
 end
 
 --[[
-	Sets up a hover animation on any GuiObject (buttons, frames, etc).
+	Sets up hover and press animations on any GuiObject (buttons, frames, etc).
 	Call once per element, e.g. right after you create/parent it.
+
+	Pressing (mouse click or touch, held or tapped) shrinks the element,
+	and releasing tweens it back to the hover state if the cursor is
+	still over it, or to the idle state if not.
 
 	options (all optional):
 		HoverScale  number    -- UIScale to tween to on hover (default 1.1)
 		IdleScale   number    -- UIScale to return to (default 1)
+		PressScale  number    -- UIScale to tween to while pressed (default 0.9)
 		HoverColor  Color3    -- BackgroundColor3 to tween to on hover
 		IdleColor   Color3    -- BackgroundColor3 to return to (defaults to current)
-		TweenInfo   TweenInfo -- overrides the default hover tween speed/style
+		PressColor  Color3    -- BackgroundColor3 to tween to while pressed (defaults to HoverColor)
+		TweenInfo   TweenInfo -- overrides the default hover/press tween speed/style
 ]]
 function Loom.Hover(element: GuiObject, options: HoverOptions?)
 	local resolvedOptions: HoverOptions = options or {}
 	local idleScale: number = resolvedOptions.IdleScale or 1
 	local hoverScale: number = resolvedOptions.HoverScale or 1.1
+	local pressScale: number = resolvedOptions.PressScale or 0.9
 	local idleColor: Color3 = resolvedOptions.IdleColor or element.BackgroundColor3
 	local hoverColor: Color3? = resolvedOptions.HoverColor
+	local pressColor: Color3? = resolvedOptions.PressColor or hoverColor
 	local info: TweenInfo = resolvedOptions.TweenInfo or HOVER_TWEEN_INFO
 
 	local uiScale: UIScale = element:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
 	uiScale.Scale = idleScale
 	uiScale.Parent = element
 
-	local function apply(scale: number, color: Color3?)
-		playTween(uiScale, info, {Scale = scale})
-		if hoverColor and color then
-			playTween(element, info, {BackgroundColor3 = color})
+	local hovering = false
+	local pressed = false
+
+	local function refresh()
+		local targetScale = idleScale
+		local targetColor = idleColor
+
+		if hovering and pressed then
+			targetScale = pressScale
+			targetColor = pressColor or idleColor
+		elseif hovering then
+			targetScale = hoverScale
+			targetColor = hoverColor or idleColor
+		end
+
+		playTween(uiScale, info, {Scale = targetScale})
+		if hoverColor then
+			playTween(element, info, {BackgroundColor3 = targetColor})
 		end
 	end
 
-	element.MouseEnter:Connect(function()
-		apply(hoverScale, hoverColor)
-	end)
+	local connections: {RBXScriptConnection} = {}
 
-	element.MouseLeave:Connect(function()
-		apply(idleScale, idleColor)
+	table.insert(connections, element.MouseEnter:Connect(function()
+		hovering = true
+		refresh()
+	end))
+
+	table.insert(connections, element.MouseLeave:Connect(function()
+		hovering = false
+		refresh()
+	end))
+
+	table.insert(connections, element.InputBegan:Connect(function(input: InputObject)
+		if not isPressInput(input) then
+			return
+		end
+
+		hovering = true
+		pressed = true
+		refresh()
+	end))
+
+	table.insert(connections, UserInputService.InputEnded:Connect(function(input: InputObject)
+		if not pressed or not isPressInput(input) then
+			return
+		end
+
+		pressed = false
+		if input.UserInputType == Enum.UserInputType.Touch then
+			hovering = false
+		end
+		refresh()
+	end))
+
+	element.Destroying:Once(function()
+		for _, connection in connections do
+			connection:Disconnect()
+		end
+		table.clear(connections)
+		cancelTween(uiScale)
+		cancelTween(element)
 	end)
 end
 

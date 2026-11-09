@@ -1,7 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
 local Serialize = require(ReplicatedStorage.Source.Core.Utils.Serialize)
-local Crops = require(ReplicatedStorage.Source.Game.Configurations.Crops)
+local Fruits = require(ReplicatedStorage.Source.Game.Configurations.Fruits)
 local Plants = require(ReplicatedStorage.Source.Game.Configurations.Plants)
 local Data = require(ReplicatedStorage.Source.Game.Data).server
 local Definitions = require(ReplicatedStorage.Source.Game.Definitions)
@@ -9,7 +9,6 @@ local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
 local PlantModels = ReplicatedStorage.Assets.Plants
-local CropTools = ReplicatedStorage.Assets.Crops.Tools
 local MAX_HARVEST_DISTANCE = 25
 local spawnOffsets: {[string]: {CFrame}} = {}
 
@@ -28,9 +27,9 @@ local function isFullyGrown(self: Plant, stage: number?): boolean
     return stage ~= nil and stage >= self.Config.GrowthStages
 end
 
-local function toNetCrop(self: Plant, crop: Definitions.Crop): Definitions.Crop
-    local copy = table.clone(crop)
-    copy.CFrame = Serialize.SerializeCFrame(self.CFrame * Serialize.UnserializeCFrame(crop.CFrame))
+local function toNetFruit(self: Plant, fruit: Definitions.Fruit): Definitions.Fruit
+    local copy = table.clone(fruit)
+    copy.CFrame = Serialize.SerializeCFrame(self.CFrame * Serialize.UnserializeCFrame(fruit.CFrame))
     return copy
 end
 
@@ -42,7 +41,7 @@ local function getSpawnOffsets(plantName: string): {CFrame}
     local config = Plants[plantName]
     local container = PlantModels:FindFirstChild(plantName)
     local model = container and container:FindFirstChild(tostring(config.GrowthStages))
-    local folder = model and (model:FindFirstChild("CropSpawnPoints") or container:FindFirstChild("CropSpawnPoints"))
+    local folder = model and (model:FindFirstChild("FruitSpawnPoints") or container:FindFirstChild("FruitSpawnPoints"))
 
     if model and model:IsA("Model") and folder then
         local pivot = model:GetPivot()
@@ -62,115 +61,98 @@ local function getSpawnOffsets(plantName: string): {CFrame}
     end
 
     if #offsets == 0 then
-        warn("No crop spawn points found for " .. plantName .. "!")
+        warn("No fruit spawn points found for " .. plantName .. "!")
     end
 
     spawnOffsets[plantName] = offsets
     return offsets
 end
 
-local function giveCropTool(backpack: Backpack, crop: Definitions.Crop)
-    local template = CropTools:FindFirstChild(crop.Name)
-    if not template or not template:IsA("Tool") then
-        warn("Crop tool is missing for " .. crop.Name .. "!")
-        return
-    end
-
-    local tool = template:Clone()
-    PlantingUtils.scaleCrop(tool, "Crop", crop.Name, crop.Weight)
-    tool:SetAttribute("IsCrop", true)
-    tool:SetAttribute("Weight", crop.Weight)
-    tool.Parent = backpack
-end
-
-local function saveCrops(self: Plant)
+local function saveFruits(self: Plant)
     local saved = self.Saved
     if not saved then return end
 
-    local crops = {}
+    local fruits = {}
 
-    for _, crop in self.Crops do
-        table.insert(crops, crop)
+    for _, fruit in self.Fruits do
+        table.insert(fruits, fruit)
     end
 
-    saved.Crops = crops
+    saved.Fruits = fruits
 end
 
-local function updateCrops(self: Plant)
+local function updateFruits(self: Plant)
     local speed = getGrowthSpeed(self.Owner)
 
-    for slot, crop in self.Crops do
-        local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime, speed)
+    for slot, fruit in self.Fruits do
+        local stage = PlantingUtils.getGrowthStageFromFruitTime(fruit.Name, fruit.SpawnTime, speed)
 
-        if stage and stage ~= self.CropStages[slot] then
-            self.CropStages[slot] = stage
-            self.Net:fireAll("updateCrop", self.Id, slot, crop.Name, stage)
+        if stage and stage ~= self.FruitStages[slot] then
+            self.FruitStages[slot] = stage
+            self.Net:fireAll("updateFruit", self.Id, slot, fruit.Name, stage)
         end
     end
 end
 
-local function spawnCrops(self: Plant)
-    if not Crops[self.CropName] then return end
+local function spawnFruits(self: Plant)
+    if not Fruits[self.FruitName] then return end
 
     local offsets = getSpawnOffsets(self.Name)
     local free = {}
     local count = 0
 
     for slot = 1, #offsets do
-        if self.Crops[slot] then
+        if self.Fruits[slot] then
             count += 1
         else
             table.insert(free, slot)
         end
     end
 
-    local missing = math.min(self.Config.CropAmount - count, #free)
+    local missing = math.min(self.Config.FruitAmount - count, #free)
     if missing <= 0 then return end
 
     for _ = 1, missing do
         local slot = table.remove(free, math.random(#free))
-        local crop: Definitions.Crop = {
-            Name = self.CropName,
+        local fruit: Definitions.Fruit = {
+            Name = self.FruitName,
             SpawnTime = workspace:GetServerTimeNow(),
-            Weight = PlantingUtils.rollWeight(self.CropName, "Crop"),
             Slot = slot,
             CFrame = Serialize.SerializeCFrame(PlantingUtils.scaleCFrame(offsets[slot], self.Scale))
         }
 
-        self.Crops[slot] = crop
-        self.CropStages[slot] = 0
-        self.Net:fireAll("spawnCrop", self.Id, toNetCrop(self, crop))
+        self.Fruits[slot] = fruit
+        self.FruitStages[slot] = 0
+        self.Net:fireAll("spawnFruit", self.Id, toNetFruit(self, fruit))
     end
 
-    saveCrops(self)
+    saveFruits(self)
 end
 
-local function collectCrop(self: Plant, plr: Player, slot: number): boolean
-    local crop = self.Crops[slot]
-    if not crop then return false end
+local function collectFruit(self: Plant, plr: Player, slot: number): boolean
+    local fruit = self.Fruits[slot]
+    if not fruit then return false end
 
-    local config = Crops[crop.Name]
+    local config = Fruits[fruit.Name]
     if not config then return false end
 
-    local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime, getGrowthSpeed(plr))
+    local stage = PlantingUtils.getGrowthStageFromFruitTime(fruit.Name, fruit.SpawnTime, getGrowthSpeed(plr))
     if not stage or stage < config.GrowthStages then return false end
 
     local data = Data[plr]
-    local backpack = plr:FindFirstChildOfClass("Backpack")
-    if not data or not backpack then return false end
+    if not data then return false end
 
-    self.Crops[slot] = nil
-    self.CropStages[slot] = nil
-    saveCrops(self)
+    local multiplier = plr:GetAttribute("2xCorn") and 2 or 1
 
-    self.Net:fireAll("deleteCrop", self.Id, slot)
+    self.Fruits[slot] = nil
+    self.FruitStages[slot] = nil
+    saveFruits(self)
 
-    data.inventory.crops.Insert({
-        Name = crop.Name,
-        Weight = crop.Weight
-    })
+    self.Net:fireAll("deleteFruit", self.Id, slot)
 
-    giveCropTool(backpack, crop)
+    for i = 1, multiplier do
+        data.inventory.fruits.Insert(fruit.Name)
+    end
 
     return true
 end
@@ -180,28 +162,45 @@ local function autoHarvest(self: Plant)
 
     local slots = {}
 
-    for slot in self.Crops do
+    for slot in self.Fruits do
         table.insert(slots, slot)
     end
 
     for _, slot in slots do
-        collectCrop(self, self.Owner, slot)
+        collectFruit(self, self.Owner, slot)
     end
 end
 
-function Plant.harvestCrop(self: Plant, plr: Player, slot: number)
+local function growFruits(self: Plant)
+    local speed = getGrowthSpeed(self.Owner)
+
+    for _, fruit in self.Fruits do
+        local config = Fruits[fruit.Name]
+        local stage = PlantingUtils.getGrowthStageFromFruitTime(fruit.Name, fruit.SpawnTime, speed)
+
+        if config and (not stage or stage < config.GrowthStages) then
+            fruit.SpawnTime = 0
+        end
+    end
+
+    saveFruits(self)
+    updateFruits(self)
+    autoHarvest(self)
+end
+
+function Plant.harvestFruit(self: Plant, plr: Player, slot: number)
     if self.Destroyed or plr ~= self.Owner then return end
 
-    local crop = self.Crops[slot]
-    if not crop then return end
+    local fruit = self.Fruits[slot]
+    if not fruit then return end
 
     local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
     if not root then return end
 
-    local cropPos = (self.CFrame * Serialize.UnserializeCFrame(crop.CFrame)).Position
-    if (root.Position - cropPos).Magnitude > MAX_HARVEST_DISTANCE then return end
+    local fruitPos = (self.CFrame * Serialize.UnserializeCFrame(fruit.CFrame)).Position
+    if (root.Position - fruitPos).Magnitude > MAX_HARVEST_DISTANCE then return end
 
-    collectCrop(self, plr, slot)
+    collectFruit(self, plr, slot)
 end
 
 function Plant.update(self: Plant)
@@ -223,9 +222,9 @@ function Plant.update(self: Plant)
 
     if not self.FullyGrown then return end
 
-    updateCrops(self)
+    updateFruits(self)
     autoHarvest(self)
-    spawnCrops(self)
+    spawnFruits(self)
 end
 
 function Plant.canGrow(self: Plant): boolean
@@ -241,9 +240,9 @@ function Plant.canGrow(self: Plant): boolean
         end
     end
 
-    for _, crop in self.Crops do
-        local config = Crops[crop.Name]
-        local stage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime, speed)
+    for _, fruit in self.Fruits do
+        local config = Fruits[fruit.Name]
+        local stage = PlantingUtils.getGrowthStageFromFruitTime(fruit.Name, fruit.SpawnTime, speed)
 
         if config and stage and stage < config.GrowthStages then
             return true
@@ -256,33 +255,31 @@ end
 function Plant.growNow(self: Plant)
     if self.Destroyed then return end
 
-    self.PlantTime = 0
+    if not self.FullyGrown then
+        self.PlantTime = 0
 
-    if self.Saved then
-        self.Saved.PlantTime = 0
+        if self.Saved then
+            self.Saved.PlantTime = 0
+        end
     end
 
     self:update()
 
-    for _, crop in self.Crops do
-        crop.SpawnTime = 0
-    end
+    if self.Destroyed or not self.FullyGrown then return end
 
-    saveCrops(self)
-    updateCrops(self)
-    autoHarvest(self)
+    growFruits(self)
 end
 
 function Plant.setSaved(self: Plant, saved: Definitions.Plant)
     self.Saved = saved
-    saveCrops(self)
+    saveFruits(self)
 end
 
 function Plant.snapshot(self: Plant): Definitions.PlantSnapshot
-    local crops = {}
+    local fruits = {}
 
-    for _, crop in self.Crops do
-        table.insert(crops, toNetCrop(self, crop))
+    for _, fruit in self.Fruits do
+        table.insert(fruits, toNetFruit(self, fruit))
     end
 
     return {
@@ -292,7 +289,7 @@ function Plant.snapshot(self: Plant): Definitions.PlantSnapshot
         PlantTime = self.PlantTime,
         Weight = self.Weight,
         CFrame = Serialize.SerializeCFrame(self.CFrame),
-        Crops = crops
+        Fruits = fruits
     }
 end
 
@@ -301,12 +298,12 @@ function Plant.destroy(self: Plant)
     self.Destroyed = true
 
     self.Janitor:Destroy()
-    table.clear(self.Crops)
-    table.clear(self.CropStages)
+    table.clear(self.Fruits)
+    table.clear(self.FruitStages)
     self.Saved = nil
 end
 
-function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, plantName: string, cframe: CFrame, weight: number, plantTime: number, crops: {Definitions.Crop}?, saved: Definitions.Plant?)
+function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, plantName: string, cframe: CFrame, weight: number, plantTime: number, fruits: {Definitions.Fruit}?, saved: Definitions.Plant?)
     local config = Plants[plantName]
     assert(config, "Plant config is missing for " .. plantName .. "!")
 
@@ -322,32 +319,33 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
     self.CFrame = cframe
     self.Pos = cframe.Position
     self.Weight = weight
-    self.Scale = PlantingUtils.getScale("Plant", plantName, weight)
+    self.Scale = PlantingUtils.getScale(plantName, weight)
     self.Name = plantName
     self.PlantTime = plantTime
     self.LastStage = stage or 0
     self.FullyGrown = isFullyGrown(self, stage)
     self.Destroyed = false
-    self.CropName = config.Crop or plantName
-    self.Crops = {}
-    self.CropStages = {}
+    self.FruitName = config.Fruit or plantName
+    self.Fruits = {}
+    self.FruitStages = {}
     self.Saved = saved
 
-    if not Crops[self.CropName] then
-        warn("Crop config is missing for " .. self.CropName .. "!")
+    if not Fruits[self.FruitName] then
+        warn("Fruit config is missing for " .. self.FruitName .. "!")
     end
 
-    if crops and self.FullyGrown then
+    if fruits and self.FullyGrown then
         local offsets = getSpawnOffsets(plantName)
 
-        for _, crop in crops do
-            local cropStage = PlantingUtils.getGrowthStageFromCropTime(crop.Name, crop.SpawnTime, speed)
-            local validSlot = type(crop.Slot) == "number" and crop.Slot >= 1 and crop.Slot <= #offsets
+        for _, fruit in fruits do
+            local fruitStage = PlantingUtils.getGrowthStageFromFruitTime(fruit.Name, fruit.SpawnTime, speed)
+            local validSlot = type(fruit.Slot) == "number" and fruit.Slot >= 1 and fruit.Slot <= #offsets
 
-            if cropStage and validSlot and not self.Crops[crop.Slot] then
-                crop.CFrame = Serialize.SerializeCFrame(PlantingUtils.scaleCFrame(offsets[crop.Slot], self.Scale))
-                self.Crops[crop.Slot] = crop
-                self.CropStages[crop.Slot] = cropStage
+            if fruitStage and validSlot and not self.Fruits[fruit.Slot] then
+                (fruit :: any).Weight = nil
+                fruit.CFrame = Serialize.SerializeCFrame(PlantingUtils.scaleCFrame(offsets[fruit.Slot], self.Scale))
+                self.Fruits[fruit.Slot] = fruit
+                self.FruitStages[fruit.Slot] = fruitStage
             end
         end
     end
@@ -370,9 +368,9 @@ type Plant = typeof(Plant) & {
     LastStage: number,
     FullyGrown: boolean,
     Destroyed: boolean,
-    CropName: string,
-    Crops: {[number]: Definitions.Crop},
-    CropStages: {[number]: number},
+    FruitName: string,
+    Fruits: {[number]: Definitions.Fruit},
+    FruitStages: {[number]: number},
     Saved: Definitions.Plant?
 }
 

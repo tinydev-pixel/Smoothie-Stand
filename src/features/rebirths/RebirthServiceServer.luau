@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Data = require(ReplicatedStorage.Source.Game.Data).server
+local Notifications = require(ReplicatedStorage.Source.Core.Utils.Notifications)
 local PlantingServer = require(ServerScriptService.Features.Planting.PlantingServer)
 local Rebirths = require(ReplicatedStorage.Source.Game.Configurations.Rebirths)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
@@ -14,7 +15,10 @@ function RebirthServiceServer.canRebirth(self: RebirthServiceServer, plr: Player
 end
 
 function RebirthServiceServer.rebirthConfirmed(self: RebirthServiceServer, plr: Player)
-    if not RebirthServiceServer:canRebirth(plr) then return end
+    if not RebirthServiceServer:canRebirth(plr) then 
+        Notifications.Show(plr, {message = "You have maxed out rebirths!"})
+        return 
+    end
 
     --// Rewards
     local gardenLevel = Rebirths.getRewardValue(Data[plr].rebirths() + 1, "GardenLevel")
@@ -29,7 +33,7 @@ function RebirthServiceServer.rebirthConfirmed(self: RebirthServiceServer, plr: 
     Data[plr].storage(
         {
             cash = 0,
-            corn = 0
+            fruits = 0
         }
     )
     Data[plr].plants({})
@@ -39,7 +43,10 @@ end
 function RebirthServiceServer.rebirth(self: RebirthServiceServer, plr: Player)
     local rebirths = Data[plr].rebirths()
     local nextRebirth = Rebirths.Data[rebirths + 1]
-    if not nextRebirth then return end
+    if not nextRebirth then 
+        Notifications.Show(plr, {message = "You have maxed out rebirths!"})
+        return 
+    end
 
     local cash = Data[plr].cash()
     local price = nextRebirth.Price

@@ -7,21 +7,12 @@ local template = {
 	gardenLevel = 1,
 	rebirths = 0,
 	inventory = {
-		seeds = {"Basic"} :: {string},
-		crops = {
-			{
-				Name = "Basic",
-				Weight = 5
-			},
-			{
-				Name = "Basic",
-				Weight = 3
-			}
-		} :: {Definitions.InventoryCrop}
+		seeds = {} :: {string},
+		fruits = {"Basic", "Basic"} :: {string}
 	},
 	plants = {} :: {Definitions.Plant},
 	storage = {
-		corn = 0,
+		fruits = 0,
 		cash = 0
 	},
 	upgrades = {

@@ -11,10 +11,10 @@ end
 function OfflineRewardsServiceServer.onPlrAdded(self: OfflineRewardsServiceServer, plr: Player)
     local data = Data[plr]
     local drainRate = data.upgrades.drainRate()
-    local cornStorage = data.storage.corn()
+    local fruits = data.storage.fruits()
     local lastLogin = data.lastLogin()
     local timePassed = workspace:GetServerTimeNow() - lastLogin
-    local claimAmount = math.min(timePassed * drainRate, cornStorage)
+    local claimAmount = math.min(timePassed * drainRate, fruits)
     if claimAmount <= 0 then return end
 
     self.claimAmounts[plr.UserId] = claimAmount
@@ -29,8 +29,8 @@ function OfflineRewardsServiceServer.claim(self, plr: Player)
     local claimAmount = self.claimAmounts[plr.UserId]
     if not claimAmount then return end
 
-    Data[plr].storage.corn(function(cornStorage: number)
-        return math.max(cornStorage - claimAmount, 0)
+    Data[plr].storage.fruits(function(fruits: number)
+        return math.max(fruits - claimAmount, 0)
     end)
 
     Data[plr].cash(function(cash)

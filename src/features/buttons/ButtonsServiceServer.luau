@@ -2,29 +2,24 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Data = require(ReplicatedStorage.Source.Game.Data).server
+local Notifications = require(ReplicatedStorage.Source.Core.Utils.Notifications)
+local MonetizationServiceUtils = require(ReplicatedStorage.Source.Features.Monetization.MonetizationServiceUtils)
 local DrainRateUpgrades = require(ReplicatedStorage.Source.Game.Configurations.DrainRateUpgrades)
+local Fruits = require(ReplicatedStorage.Source.Game.Configurations.Fruits)
 local GroupRewardsServiceServer = require(ServerScriptService.Features.GroupRewards.GroupRewardsServiceServer)
+local MonetizationServiceServer = require(ServerScriptService.Features.Monetization.MonetizationServiceServer)
 local OfflineRewardsServiceServer = require(ServerScriptService.Features.OfflineRewards.OfflineRewardsServiceServer)
 local Signals = require(ReplicatedStorage.Source.Game.Signals)
 local CalculateCash = require(ReplicatedStorage.Source.Game.Utils.CalculateCash)
-local OwnsGamepass = require(ReplicatedStorage.Source.Game.Utils.OwnsGamepass)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
+local restrictedByOfflineRewards = {
+    "ClaimMoney", 
+    "InsertFruits",
+}
+
 local ButtonsServiceServer = {}
-
-local function destroyCropTool(container: Instance?, name: string, weight: number): boolean
-    if not container then return false end
-
-    for _, item in container:GetChildren() do
-        if item:IsA("Tool") and item.Name == name and item:GetAttribute("IsCrop") and item:GetAttribute("Weight") == weight then
-            item:Destroy()
-            return true
-        end
-    end
-
-    return false
-end
 
 local function claimMoney(plr: Player)
     local data = Data[plr]
@@ -39,32 +34,32 @@ local function claimMoney(plr: Player)
     end)
 end
 
-local function insertCorn(plr: Player)
+local function insertFruits(self: ButtonsServiceServer, plr: Player)
     local data = Data[plr]
     if not data then return end
 
-    local crops = data.inventory.crops()
-    if #crops == 0 then return end
-
-    local doubleTheCorn = OwnsGamepass(plr, "2xCorn")
+    local fruits = data.inventory.fruits()
+    if #fruits == 0 then return end
 
     local toInsert = {}
-    for i, crop in crops do
-        table.insert(toInsert, {index = i, name = crop.Name, weight = crop.Weight})
+    for i, name in fruits do
+        local config = Fruits[name]
+
+        if config then
+            table.insert(toInsert, {index = i, value = config.Value})
+        end
     end
 
     for n = #toInsert, 1, -1 do
         local entry = toInsert[n]
 
-        data.inventory.crops.Remove(entry.index)
-        data.storage.corn(function(corn)
-            return corn + entry.weight * (doubleTheCorn and 2 or 1)
+        data.inventory.fruits.Remove(entry.index)
+        data.storage.fruits(function(corn)
+            return corn + entry.value 
         end)
-
-        if not destroyCropTool(plr:FindFirstChildOfClass("Backpack"), entry.name, entry.weight) then
-            destroyCropTool(plr.Character, entry.name, entry.weight)
-        end
     end
+
+    self.Net:fire(plr, "onFruitsInsert")
 end
 
 local function upgradeDrainRate(plr: Player)
@@ -80,33 +75,36 @@ local function upgradeDrainRate(plr: Player)
 end
 
 function ButtonsServiceServer.btnActivated(self: ButtonsServiceServer, plr: Player, btnType: string)
-    if not OfflineRewardsServiceServer:plrHasClaimed(plr) then 
-        -- Notification
+    if type(btnType) ~= "string" then return end
+
+    if not OfflineRewardsServiceServer:plrHasClaimed(plr) and table.find(restrictedByOfflineRewards, btnType) then
+        Notifications.Show(plr, {message = "Claim offline rewards first!", color = Color3.new(1, 0, 0)})
         return
     end
-    if type(btnType) ~= "string" then return end
 
     if btnType == "ClaimMoney" then
         claimMoney(plr)
-    elseif btnType == "InsertCorn" then
-        insertCorn(plr)
+    elseif btnType == "InsertFruits" then
+        insertFruits(self, plr)
     elseif btnType == "GroupRewards" then
         GroupRewardsServiceServer:claim(plr)
     elseif btnType == "DrainRate" then
         upgradeDrainRate(plr)
+    elseif MonetizationServiceUtils.getInfoFromName(btnType) ~= nil then
+        MonetizationServiceServer:requestPurchase(plr, btnType)
     end
 end
 
 function ButtonsServiceServer.process(self: ButtonsServiceServer, plr: Player, toDrain: number?)
     local data = Data[plr]
-    local cornStorage = data and data.storage.corn() or 0
+    local fruits = data and data.storage.fruits() or 0
 
-    if OfflineRewardsServiceServer:plrHasClaimed(plr) and data and cornStorage > 0 then
-        local drained = toDrain or math.min(cornStorage, data.upgrades.drainRate())
+    if OfflineRewardsServiceServer:plrHasClaimed(plr) and data and fruits > 0 then
+        local drained = toDrain or math.min(fruits, data.upgrades.drainRate())
         local totalCash = CalculateCash(plr, data.rebirths(), drained)
 
         if drained > 0 then
-            data.storage.corn(function(corn)
+            data.storage.fruits(function(corn)
                 return math.max(corn - drained, 0)
             end)
 

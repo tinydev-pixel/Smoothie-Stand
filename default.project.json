@@ -42,6 +42,10 @@
             "$path": "src/game/utils"
           },
 
+          "UI": {
+            "$path": "src/game/ui"
+          },
+
           "Data": {
             "$path": "src/game/Data.luau"
           },
@@ -119,6 +123,22 @@
 
             "MonetizationServiceUtils": {
               "$path": "src/features/monetization/MonetizationServiceUtils.luau"
+            }
+          }, 
+
+          "Gear": {
+            "$className": "Folder",
+
+            "Components": {
+              "$path": "src/features/gear/components"
+            },
+
+            "GearServiceClient": {
+              "$path": "src/features/gear/GearServiceClient.luau"
+            },
+
+            "GearServiceUtils": {
+              "$path": "src/features/gear/GearServiceUtils.luau"
             }
           }
         }
@@ -206,6 +226,14 @@
 
           "Handlers": {
             "$path": "src/features/monetization/handlers"
+          }
+        },
+
+        "Gear": {
+          "$className": "Folder",
+
+          "GearServiceServer": {
+            "$path": "src/features/gear/GearServiceServer.luau"
           }
         }
       }

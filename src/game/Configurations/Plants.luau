@@ -7,7 +7,7 @@ return {
         }, 
         GrowTime = 30,
         GrowthStages = 5,
-        CropAmount = 1,
-        Crop = "Basic"
+        FruitAmount = 1,
+        Fruit = "Basic"
     }
 }

@@ -11,6 +11,8 @@ local Data = require(ReplicatedStorage.Source.Game.Data).server
 local Definitions = require(ReplicatedStorage.Source.Game.Definitions)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
+local MAX_SHOVEL_DISTANCE = 30
+
 local nextId = 0
 
 local PlantingServer = {}
@@ -39,11 +41,29 @@ local function migrateSave(saved: Definitions.Plant)
     saved.Space = "Plot"
 end
 
+local function removeSaved(plr: Player, plant)
+    local list = Data[plr].plants()
+    local index = plant.Saved and table.find(list, plant.Saved)
+
+    if not index then
+        for i, saved in list do
+            if saved.Name == plant.Name and saved.PlantTime == plant.PlantTime then
+                index = i
+                break
+            end
+        end
+    end
+
+    if index then
+        Data[plr].plants.Remove(index)
+    end
+end
+
 local function createPlant(self: PlantingServer, plr: Player, data: Definitions.Plant, saved: Definitions.Plant?, plotCFrame: CFrame)
     local id = generateId()
     local plotPos = Serialize.UnserializeVector3(data.Pos)
     local cframe = PlantingUtils.toWorldCFrame(plotCFrame, plotPos)
-    local plant = Plant.new(self.Net, plr, id, data.Name, cframe, data.Weight, data.PlantTime, data.Crops, saved)
+    local plant = Plant.new(self.Net, plr, id, data.Name, cframe, data.Weight, data.PlantTime, data.Fruits, saved)
 
     self.Plants[id] = plant
 
@@ -113,13 +133,29 @@ function PlantingServer.requestPlants(self: PlantingServer, plr: Player)
     end
 end
 
-function PlantingServer.harvestCrop(self: PlantingServer, plr: Player, plantId: number, slot: number)
+function PlantingServer.harvestFruit(self: PlantingServer, plr: Player, plantId: number, slot: number)
     if type(plantId) ~= "number" or type(slot) ~= "number" then return end
 
     local plant = self.Plants[plantId]
     if not plant then return end
 
-    plant:harvestCrop(plr, slot)
+    plant:harvestFruit(plr, slot)
+end
+
+function PlantingServer.removePlant(self: PlantingServer, plr: Player, plantId: number)
+    if type(plantId) ~= "number" then return end
+
+    local plant = self.Plants[plantId]
+    if not plant or plant.Owner ~= plr then return end
+
+    local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+    if not root or (root.Position - plant.Pos).Magnitude > MAX_SHOVEL_DISTANCE then return end
+
+    removeSaved(plr, plant)
+    plant:destroy()
+    self.Plants[plantId] = nil
+
+    self.Net:fireAll("deletePlants", {plantId})
 end
 
 function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
@@ -149,7 +185,7 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
     local plantData: Definitions.Plant = {
         Name = seedName,
         PlantTime = workspace:GetServerTimeNow(),
-        Weight = PlantingUtils.rollWeight(seedName, "Plant"),
+        Weight = PlantingUtils.rollWeight(seedName),
         Pos = Serialize.SerializeVector3(PlantingUtils.toPlotPosition(plotCFrame, pos)),
         Space = "Plot"
     }
@@ -183,7 +219,11 @@ function PlantingServer.growAll(self: PlantingServer, plr: Player): boolean
 
     for _, plant in self.Plants do
         if plant.Owner == plr then
-            plant:growNow()
+            local ok, err = pcall(plant.growNow, plant)
+
+            if not ok then
+                warn("Plant " .. plant.Id .. " failed to grow: " .. tostring(err))
+            end
         end
     end
 
@@ -191,7 +231,7 @@ function PlantingServer.growAll(self: PlantingServer, plr: Player): boolean
 end
 
 function PlantingServer.Init(self: PlantingServer)
-    self.Net = Networker.server.new("Planting", self, {self.plant, self.requestPlants, self.harvestCrop})
+    self.Net = Networker.server.new("Planting", self, {self.plant, self.requestPlants, self.harvestFruit})
     self.Plants = {}
     self.Loaded = {}
     self.Synced = {}

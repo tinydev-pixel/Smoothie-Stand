@@ -3,6 +3,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
+local GearServiceClient = require(ReplicatedStorage.Source.Features.Gear.GearServiceClient)
+local GearServiceUtils = require(ReplicatedStorage.Source.Features.Gear.GearServiceUtils)
 local PlantingClient = require(ReplicatedStorage.Source.Features.Planting.PlantingClient)
 local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
 local ImageIds = require(ReplicatedStorage.Source.Game.Assets.ImageIds)
@@ -374,13 +376,23 @@ function InventoryClient.sync(self: InventoryClient, items: {{Name: string, Amou
     self.Equipped = equipped
     self.HotbarCount = hotbarCount
 
-    --// Support for different items (seeds, tools, etc.)
+    --// Support for different items (seeds, gear, etc.)
 
     if equipped ~= previousEquipped then
-        if PlantingUtils.isSeed(equipped) then
-            PlantingClient:equipped()
-        elseif PlantingUtils.isSeed(previousEquipped) then
-            PlantingClient:unequipped()
+        if previousEquipped then
+            if PlantingUtils.isSeed(previousEquipped) then
+                PlantingClient:unequipped()
+            elseif GearServiceUtils.isGear(previousEquipped) then
+                GearServiceClient:unequipped(previousEquipped)
+            end
+        end
+
+        if equipped then
+            if PlantingUtils.isSeed(equipped) then
+                PlantingClient:equipped()
+            elseif GearServiceUtils.isGear(equipped) then
+                GearServiceClient:equipped(equipped)
+            end
         end
     end
 end

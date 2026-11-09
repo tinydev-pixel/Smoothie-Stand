@@ -9,11 +9,11 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
-local Janitor = require(ReplicatedStorage.Packages.Janitor)
-local Sounds = require(ReplicatedStorage.Modules.Configs.Sounds)
-local Audio = require(ReplicatedStorage.Packages.Audio).new()
+local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
+local SoundIds = require(ReplicatedStorage.Source.Game.Assets.SoundIds)
+local Audio = require(ReplicatedStorage.Source.Packages.Audio).new()
 
-local NotificationTemplate = ReplicatedStorage.Assets.Interface.Notification
+local NotificationTemplate = ReplicatedStorage.Assets.UI.Notification
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
@@ -108,7 +108,7 @@ return function(remote: RemoteEvent)
 
 		active[destroy] = true
 
-		Audio:PlaySFX(Sounds.Notification)
+		Audio:PlaySFX(SoundIds.Notification)
 
 		local showTween = TweenService:Create(clone, SHOW_TWEEN_INFO, { Size = normalSize })
 		showTween:Play()

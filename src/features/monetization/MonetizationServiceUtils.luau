@@ -4,26 +4,24 @@ local ProductIds = require(ReplicatedStorage.Source.Game.Assets.ProductIds)
 
 local MonetizationServiceUtils = {}
 
-function MonetizationServiceUtils.getInfoFromName(givenName: string): number? | string?
-    if typeof(givenName) ~= "string" then return end
+function MonetizationServiceUtils.getInfoFromName(givenName: string): (number?, string?)
+    if typeof(givenName) ~= "string" then return nil, nil end
 
-    for name, id in GamepassIds do
-        if name == givenName then
-            return id, "GamePass"
-        end
+    local gamepassId = GamepassIds[givenName]
+    if gamepassId then
+        return gamepassId, "GamePass"
     end
 
-    for name, id in ProductIds do
-        if name == givenName then
-            return id, "Product"
-        end
+    local productId = ProductIds[givenName]
+    if productId then
+        return productId, "Product"
     end
 
-    return 
+    return nil, nil
 end
 
 function MonetizationServiceUtils.getNameFromId(givenId: number): string?
-    if typeof(givenId) ~= "number" then return end
+    if typeof(givenId) ~= "number" then return nil end
 
     for name, id in GamepassIds do
         if id == givenId then
@@ -37,7 +35,7 @@ function MonetizationServiceUtils.getNameFromId(givenId: number): string?
         end
     end
 
-    return 
+    return nil
 end
 
 type MonetizationServiceUtils = typeof(MonetizationServiceUtils)
