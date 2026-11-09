@@ -22,7 +22,7 @@ local function checkConditions(plr: Player, name: string): (boolean, string?)
     if name == "SkipRebirth" then
         return RebirthsServiceServer:canRebirth(plr), "You have reached maximum rebirths!"
     elseif name == "FinishAll" then
-        return Data[plr].storage.corn() > 0, "You have no corn in storage!"
+        return Data[plr].storage.fruits() > 0, "You have no corn in storage!"
     elseif name == "GrowAll" then
         return PlantingServer:canGrowAll(plr), "You have nothing to currently grow!"
     end
