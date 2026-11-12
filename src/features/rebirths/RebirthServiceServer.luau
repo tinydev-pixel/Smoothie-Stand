@@ -28,7 +28,7 @@ function RebirthServiceServer.rebirthConfirmed(self: RebirthServiceServer, plr: 
     end)
 
     --// Losses
-    Data[plr].cash(0)
+    Data[plr].cash(10)
     Data[plr].upgrades.drainRate(1)
     Data[plr].storage(
         {

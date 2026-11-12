@@ -14,7 +14,7 @@ local Data = require(ReplicatedStorage.Source.Game.Data).client
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 local Spring = require(ReplicatedStorage.Source.Packages.Spring)
 
-local Plots = workspace.Plots
+local Plots = workspace.Map.Plots
 local Cars = ReplicatedStorage.Assets.Cars
 
 local redColor = Color3.new(0.890196, 0.254902, 0.443137) 
@@ -22,7 +22,7 @@ local greenColor =Color3.new(0.07451, 0.862745, 0.113725)
 
 local ButtonsServiceClient = {}
 
-local function getPlotStuff(plotId: number): Folder? | SurfaceGui? | Part?
+local function getPlotStuff(plotId: number): Folder? | SurfaceGui? | Part? | Model?
     local plot = Plots:FindFirstChild(plotId) or Plots:WaitForChild(plotId, 5)
     local main = plot and plot:FindFirstChild("Main") or plot:WaitForChild("Main", 5)
     local buttons = main and main:FindFirstChild("Buttons") or main:WaitForChild("Buttons", 5)
@@ -30,7 +30,9 @@ local function getPlotStuff(plotId: number): Folder? | SurfaceGui? | Part?
     local carPart = stand and stand:FindFirstChild("CarPart")
     local signPart = main and main:FindFirstChild("Sign")
     local sign = signPart and signPart:FindFirstChildWhichIsA("SurfaceGui")
-    return buttons, sign, carPart
+    local blender = main and main:FindFirstChild("Blender")
+    local fill = blender and blender:FindFirstChild("Fill")
+    return buttons, sign, carPart, fill
 end
 
 local function getBtn(self: ButtonsServiceClient, btnType: string): Part?
@@ -43,6 +45,80 @@ local function updateBtnColor(btn: Part, value: number)
     else
         btn.Color = greenColor
     end
+end
+
+local function getBlenderParts(blender: Instance): {BasePart}
+    local parts = {}
+    if blender:IsA("BasePart") then
+        table.insert(parts, blender)
+    end
+    for _, d in blender:GetDescendants() do
+        if d:IsA("BasePart") then
+            table.insert(parts, d)
+        end
+    end
+    return parts
+end
+
+local function setBlenderTransparency(self: ButtonsServiceClient, transparency: number, time: number)
+    for _, part in getBlenderParts(self.blender) do
+        if time <= 0 then
+            part.Transparency = transparency
+        else
+            TweenService:Create(part, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Transparency = transparency,
+            }):Play()
+        end
+    end
+end
+
+local function animateBlender(self: ButtonsServiceClient, processing: boolean)
+    if not self.blender then return end
+    if self.blenderProcessing == processing then return end
+    self.blenderProcessing = processing
+
+    self.blenderToken = (self.blenderToken or 0) + 1
+    local token = self.blenderToken
+
+    if not processing then
+        if self.blenderSound then
+            self.blenderSound:Stop()
+        end
+        
+        setBlenderTransparency(self, 1, 0.5)
+        return
+    end
+
+    if self.blenderSound then
+        self.blenderSound:Play()
+    else
+        self.blenderSound = PlaySoundInSpace(SoundIds.Blender, self.blender:FindFirstChildWhichIsA("BasePart"), true, nil, 0.2)
+    end
+    setBlenderTransparency(self, 0, 0.3)
+
+    local parts = getBlenderParts(self.blender)
+    local hue = 0
+
+    task.spawn(function()
+        while self.blenderToken == token do
+            hue = (hue + 0.1) % 1
+            local color = Color3.fromHSV(hue, 1, 1)
+
+            for _, part in parts do
+                if part.Parent then
+                    TweenService:Create(part, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+                        Color = color,
+                    }):Play()
+                end
+            end
+
+            task.wait(1)
+        end
+    end)
+end
+
+local function updateBlender(self: ButtonsServiceClient, fruits: number)
+    animateBlender(self, fruits > 0)
 end
 
 local function playHeartAnimation(part: Part)
@@ -151,8 +227,10 @@ local function updateMoneyStorage(self: ButtonsServiceClient, cashStorage: numbe
 
         updateBtnColor(btn, cashStorage)
 
-        if cashStorage ~= 0 and not self.carSpawned and self.carPart then
-            spawnCar(self)
+        if cashStorage ~= 0 then
+            if not self.carSpawned and self.carPart then
+                spawnCar(self)
+            end
         end
     end
 end
@@ -189,7 +267,7 @@ local function updateDrainRate(self: ButtonsServiceClient, drainRate: number, ca
 end
 
 function ButtonsServiceClient.onPlotAssigned(self: ButtonsServiceClient, plotId: number)
-    local buttons, sign, carPart = getPlotStuff(plotId)
+    local buttons, sign, carPart, blender = getPlotStuff(plotId)
     if not buttons or not sign then 
         warn("Plot " .. plotId .. " is missing it's buttons and/or sign, or it just hasn't loaded in on the client!")
         return 
@@ -202,10 +280,16 @@ function ButtonsServiceClient.onPlotAssigned(self: ButtonsServiceClient, plotId:
 
     self.sign = sign
     self.carPart = carPart
+    self.blender = blender
+
+    if self.blender then
+        setBlenderTransparency(self, 1, 0)
+    end
 
     task.spawn(updateDrainRate, self, Data.upgrades.drainRate(), Data.cash())
     task.spawn(updateGroupRewards, self, Data.groupRewards())
     task.spawn(updateMoneyStorage, self, Data.storage.cash())
+    task.spawn(updateBlender, self, Data.storage.fruits())
 end
 
 function ButtonsServiceClient.updateSign(self: ButtonsServiceClient, fruitsStorage: number, drainRate: number)
@@ -229,6 +313,7 @@ function ButtonsServiceClient.Init(self: ButtonsServiceClient)
 
     Data.storage.fruits.Changed(function(fruits: number, a1: number, a2: string?)
         self:updateSign(fruits, Data.upgrades.drainRate())
+        updateBlender(self, fruits)
     end)
 
     Data.upgrades.drainRate.Changed(function(drainRate: number, a1: number, a2: string?)
@@ -257,7 +342,11 @@ type ButtonsServiceClient = typeof(ButtonsServiceClient) & {
     btns: {[string]: typeof(ButtonClient)},
     sign: SurfaceGui,
     carSpawned: boolean,
-    carPart: Part
+    carPart: Part,
+    blender: Model,
+    blenderProcessing: boolean?,
+    blenderToken: number?,
+    blenderSound: Sound
 }
 
 return ButtonsServiceClient :: ButtonsServiceClient

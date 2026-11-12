@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Plant = require(ServerScriptService.Features.Planting.Classes.Plant)
 local PlotServer = require(ServerScriptService.Features.Plots.PlotServer)
+local TutorialServiceServer = require(ServerScriptService.Features.Tutorial.TutorialServiceServer)
 local GetEquippedTool = require(ReplicatedStorage.Source.Core.Platform.GetEquippedTool)
 local Serialize = require(ReplicatedStorage.Source.Core.Utils.Serialize)
 local PlantingUtils = require(ReplicatedStorage.Source.Features.Planting.PlantingUtils)
@@ -42,6 +43,8 @@ local function migrateSave(saved: Definitions.Plant)
 end
 
 local function removeSaved(plr: Player, plant)
+    if not Data[plr] then return end
+
     local list = Data[plr].plants()
     local index = plant.Saved and table.find(list, plant.Saved)
 
@@ -59,11 +62,25 @@ local function removeSaved(plr: Player, plant)
     end
 end
 
+local function discardPlant(self: PlantingServer, plant)
+    local id = plant.Id
+
+    removeSaved(plant.Owner, plant)
+    plant:destroy()
+    self.Plants[id] = nil
+
+    self.Net:fireAll("deletePlants", {id})
+end
+
 local function createPlant(self: PlantingServer, plr: Player, data: Definitions.Plant, saved: Definitions.Plant?, plotCFrame: CFrame)
     local id = generateId()
     local plotPos = Serialize.UnserializeVector3(data.Pos)
     local cframe = PlantingUtils.toWorldCFrame(plotCFrame, plotPos)
-    local plant = Plant.new(self.Net, plr, id, data.Name, cframe, data.Weight, data.PlantTime, data.Fruits, saved)
+    local plant = Plant.new(self.Net, plr, id, data.Name, cframe, data.PlantTime, data.Fruits, saved)
+
+    plant.OnHarvest = function(harvester: Player)
+        TutorialServiceServer:advance(harvester, 4)
+    end
 
     self.Plants[id] = plant
 
@@ -142,6 +159,19 @@ function PlantingServer.harvestFruit(self: PlantingServer, plr: Player, plantId:
     plant:harvestFruit(plr, slot)
 end
 
+function PlantingServer.harvestPlant(self: PlantingServer, plr: Player, plantId: number)
+    if type(plantId) ~= "number" then return end
+
+    local plant = self.Plants[plantId]
+    if not plant then return end
+
+    plant:harvestPlant(plr)
+
+    if plant.Harvested then
+        discardPlant(self, plant)
+    end
+end
+
 function PlantingServer.removePlant(self: PlantingServer, plr: Player, plantId: number)
     if type(plantId) ~= "number" then return end
 
@@ -151,11 +181,7 @@ function PlantingServer.removePlant(self: PlantingServer, plr: Player, plantId: 
     local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
     if not root or (root.Position - plant.Pos).Magnitude > MAX_SHOVEL_DISTANCE then return end
 
-    removeSaved(plr, plant)
-    plant:destroy()
-    self.Plants[plantId] = nil
-
-    self.Net:fireAll("deletePlants", {plantId})
+    discardPlant(self, plant)
 end
 
 function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
@@ -185,7 +211,6 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
     local plantData: Definitions.Plant = {
         Name = seedName,
         PlantTime = workspace:GetServerTimeNow(),
-        Weight = PlantingUtils.rollWeight(seedName),
         Pos = Serialize.SerializeVector3(PlantingUtils.toPlotPosition(plotCFrame, pos)),
         Space = "Plot"
     }
@@ -202,6 +227,9 @@ function PlantingServer.plant(self: PlantingServer, plr: Player, pos: Vector3)
 
     self.Net:fireAll("spawnPlants", {plant:snapshot()})
     self.Net:fire(plr, "playAnimation", pos, seedName)
+
+    TutorialServiceServer:advance(plr, 2)
+    TutorialServiceServer:advance(plr, 12)
 end
 
 function PlantingServer.canGrowAll(self: PlantingServer, plr: Player): boolean
@@ -224,6 +252,10 @@ function PlantingServer.growAll(self: PlantingServer, plr: Player): boolean
             if not ok then
                 warn("Plant " .. plant.Id .. " failed to grow: " .. tostring(err))
             end
+
+            if plant.Harvested then
+                discardPlant(self, plant)
+            end
         end
     end
 
@@ -231,7 +263,7 @@ function PlantingServer.growAll(self: PlantingServer, plr: Player): boolean
 end
 
 function PlantingServer.Init(self: PlantingServer)
-    self.Net = Networker.server.new("Planting", self, {self.plant, self.requestPlants, self.harvestFruit})
+    self.Net = Networker.server.new("Planting", self, {self.plant, self.requestPlants, self.harvestFruit, self.harvestPlant})
     self.Plants = {}
     self.Loaded = {}
     self.Synced = {}
@@ -257,6 +289,12 @@ function PlantingServer.Init(self: PlantingServer)
 
                 if not ok then
                     warn("Plant " .. plant.Id .. " failed to update: " .. tostring(err))
+                end
+
+                if plant.Harvested then
+                    discardPlant(self, plant)
+                elseif plant.FullyGrown then
+                    TutorialServiceServer:advance(plant.Owner, 3)
                 end
             end
 

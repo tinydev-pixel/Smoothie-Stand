@@ -9,6 +9,7 @@ local Fruits = require(ReplicatedStorage.Source.Game.Configurations.Fruits)
 local GroupRewardsServiceServer = require(ServerScriptService.Features.GroupRewards.GroupRewardsServiceServer)
 local MonetizationServiceServer = require(ServerScriptService.Features.Monetization.MonetizationServiceServer)
 local OfflineRewardsServiceServer = require(ServerScriptService.Features.OfflineRewards.OfflineRewardsServiceServer)
+local TutorialServiceServer = require(ServerScriptService.Features.Tutorial.TutorialServiceServer)
 local Signals = require(ReplicatedStorage.Source.Game.Signals)
 local CalculateCash = require(ReplicatedStorage.Source.Game.Utils.CalculateCash)
 local Janitor = require(ReplicatedStorage.Source.Packages.Janitor)
@@ -32,6 +33,8 @@ local function claimMoney(plr: Player)
     data.cash(function(cash)
         return cash + cashStorage
     end)
+
+    TutorialServiceServer:advance(plr, 6)
 end
 
 local function insertFruits(self: ButtonsServiceServer, plr: Player)
@@ -60,6 +63,10 @@ local function insertFruits(self: ButtonsServiceServer, plr: Player)
     end
 
     self.Net:fire(plr, "onFruitsInsert")
+
+    if #toInsert > 0 then
+        TutorialServiceServer:advance(plr, 5)
+    end
 end
 
 local function upgradeDrainRate(plr: Player)
@@ -72,6 +79,8 @@ local function upgradeDrainRate(plr: Player)
     Data[plr].cash(function(oldAmt)
         return oldAmt - nextUpg.Price
     end)
+
+    TutorialServiceServer:advance(plr, 7)
 end
 
 function ButtonsServiceServer.btnActivated(self: ButtonsServiceServer, plr: Player, btnType: string)

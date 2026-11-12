@@ -41,6 +41,19 @@ local function setAsOwned(self: MonetizationServiceServer, plr: Player, name: st
     plr:SetAttribute(name, true)
 end
 
+local function runHandler(handler: Instance, plr: Player, productName: string): Enum.ProductPurchaseDecision
+    local s, result = pcall(function()
+        return require(handler)(plr, productName)
+    end)
+
+    if not s then
+        warn(result)
+        return Enum.ProductPurchaseDecision.NotProcessedYet
+    end
+
+    return result or Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
 function MonetizationServiceServer.onPlrRemoving(self: MonetizationServiceServer, plr: Player)
     self.ownedGamepasses[plr.UserId] = nil
 end
@@ -96,17 +109,18 @@ function MonetizationServiceServer.processReceipt(self: MonetizationServiceServe
     end
 
     local handler = Handlers:FindFirstChild(productName)
-    if handler then
-        local s, result = pcall(function()
-            return require(handler)(plr)
-        end)
 
-        if not s then
-            warn(result)
+    if not handler and string.find(productName, "Seed", 1, true) then
+        handler = Handlers:FindFirstChild("AnySeed")
+
+        if not handler then
+            warn("AnySeed handler is missing!")
             return Enum.ProductPurchaseDecision.NotProcessedYet
         end
+    end
 
-        return result or Enum.ProductPurchaseDecision.PurchaseGranted
+    if handler then
+        return runHandler(handler, plr, productName)
     end
 
     return Enum.ProductPurchaseDecision.PurchaseGranted

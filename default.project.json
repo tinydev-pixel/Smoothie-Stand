@@ -43,7 +43,35 @@
           },
 
           "UI": {
-            "$path": "src/game/ui"
+            "$className": "Folder",
+
+            "Classes": {
+              "$path": "src/game/ui/classes"
+            },
+
+            "Basket": {
+              "$path": "src/game/ui/Basket.luau"
+            },
+
+            "ButtonUX": {
+              "$path": "src/game/ui/ButtonUX.luau"
+            },
+
+            "Currencies": {
+              "$path": "src/game/ui/Currencies.luau"
+            },
+
+            "FramesManager": {
+              "$path": "src/game/ui/FramesManager.luau"
+            },
+
+            "InviteFriends": {
+              "$path": "src/game/ui/InviteFriends.luau"
+            },
+
+            "UpdatePrompts": {
+              "$path": "src/game/ui/UpdatePrompts.luau"
+            }
           },
 
           "Data": {
@@ -140,6 +168,46 @@
             "GearServiceUtils": {
               "$path": "src/features/gear/GearServiceUtils.luau"
             }
+          },
+
+          "Index": {
+            "$className": "Folder",
+
+            "IndexServiceClient": {
+              "$path": "src/features/index/IndexServiceClient.luau"
+            }
+          },
+
+          "Codes": {
+            "$className": "Folder",
+
+            "CodesServiceClient": {
+              "$path": "src/features/codes/CodesServiceClient.luau"
+            }
+          },
+
+          "Teleportation": {
+            "$className": "Folder",
+
+            "TeleportServiceClient": {
+              "$path": "src/features/teleportation/TeleportServiceClient.luau"
+            }
+          },
+
+          "SeedShop": {
+            "$className": "Folder",
+
+            "SeedShopServiceClient": {
+              "$path": "src/features/seed shop/SeedShopServiceClient.luau"
+            }
+          },
+
+          "Tutorial": {
+            "$className": "Folder",
+
+            "TutorialServiceClient": {
+              "$path": "src/features/tutorial/TutorialServiceClient.luau"
+            }
           }
         }
       }
@@ -234,6 +302,38 @@
 
           "GearServiceServer": {
             "$path": "src/features/gear/GearServiceServer.luau"
+          }
+        },
+
+        "Codes": {
+          "$className": "Folder",
+
+          "CodesServiceServer": {
+            "$path": "src/features/codes/CodesServiceServer.luau"
+          }
+        },
+
+        "Teleportation": {
+          "$className": "Folder",
+
+          "TeleportServiceServer": {
+            "$path": "src/features/teleportation/TeleportServiceServer.luau"
+          }
+        },
+
+        "SeedShop": {
+          "$className": "Folder",
+
+          "SeedShopServiceServer": {
+            "$path": "src/features/seed shop/SeedShopServiceServer.luau"
+          }
+        },
+
+        "Tutorial": {
+          "$className": "Folder",
+
+          "TutorialServiceServer": {
+            "$path": "src/features/tutorial/TutorialServiceServer.luau"
           }
         }
       }

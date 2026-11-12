@@ -7,8 +7,8 @@ local template = {
 	gardenLevel = 1,
 	rebirths = 0,
 	inventory = {
-		seeds = {} :: {string},
-		fruits = {"Basic", "Basic"} :: {string}
+		seeds = {"Carrot", "Carrot"} :: {string},
+		fruits = {} :: {string}
 	},
 	plants = {} :: {Definitions.Plant},
 	storage = {
@@ -19,7 +19,12 @@ local template = {
 		drainRate = 1
 	},
 	lastLogin = 0,
-	groupRewards = 0
+	groupRewards = 0,
+	index = {} :: {string},
+	tutorial = {
+		completed = false,
+		step = 1
+	}
 } 
 
 return Dataservice({

@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Loom = require(ReplicatedStorage.Source.Core.Utils.Loom)
+local SoundIds = require(ReplicatedStorage.Source.Game.Assets.SoundIds)
 
 local Player = Players.LocalPlayer
 
@@ -12,6 +13,8 @@ function ButtonUX.onDescAdded(self: ButtonUX, inst: Instance)
 end
 
 function ButtonUX.Init(self: ButtonUX)
+    Loom.SetClickSound(SoundIds.Click)
+
     task.spawn(function()
         local gui = Player.PlayerGui
         if not gui then repeat task.wait() until gui == Player.PlayerGui end

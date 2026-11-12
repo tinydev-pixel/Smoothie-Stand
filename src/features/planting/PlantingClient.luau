@@ -17,12 +17,11 @@ local Definitions = require(ReplicatedStorage.Source.Game.Definitions)
 local LocalPlayer = Players.LocalPlayer
 local SeedModels = ReplicatedStorage.Assets.Seeds.Models
 local PlantModels = ReplicatedStorage.Assets.Plants
-local FruitModels = ReplicatedStorage.Assets.Fruits.Models
+local FruitModels = ReplicatedStorage.Assets.Fruits
 local RAY_LENGTH = 500
-local FRUIT_SCALE = 1
 local PIN_DURATION = 4
 local SFX_LIFETIME = 5
-local NAME_SUFFIX = " Corn"
+local NAME_SUFFIX = " Plant"
 
 local PlantFolder = Instance.new("Folder")
 PlantFolder.Name = "ClientPlants"
@@ -98,7 +97,7 @@ local function getStageModel(models: Instance, name: string, stage: number): Mod
     return nil
 end
 
-local function spawnStageModel(models: Instance, name: string, stage: number?, cframe: CFrame, scale: number): Model?
+local function spawnStageModel(models: Instance, name: string, stage: number?, cframe: CFrame): Model?
     if not stage or stage < 1 then
         return nil
     end
@@ -110,7 +109,6 @@ local function spawnStageModel(models: Instance, name: string, stage: number?, c
     end
 
     local clone = model:Clone()
-    clone:ScaleTo(scale)
     clone:PivotTo(cframe)
     clone.Parent = PlantFolder
 
@@ -313,11 +311,12 @@ local function updateTooltip(self: PlantingClient)
 
     local speed = getGrowthSpeed(self.Owners[plantId])
     local left = getTimeLeft(config.GrowTime, info.StartTime, speed)
+    local harvestable = slot ~= nil or PlantingUtils.isSingleHarvest(info.Name)
 
-    nameLabel.Text = info.Name .. NAME_SUFFIX
+    nameLabel.Text = if slot then info.Name else info.Name .. NAME_SUFFIX
 
     if info.Done or left <= 0 then
-        timeLabel.Text = if slot then "Ready to harvest" else "Fully grown"
+        timeLabel.Text = if harvestable then "Ready to harvest" else "Fully grown"
     else
         timeLabel.Text = "Time left: " .. formatTime(left)
     end
@@ -363,6 +362,40 @@ local function addHarvestPrompt(self: PlantingClient, plantId: number, slot: num
     prompt.Triggered:Connect(function()
         playSfxAt(SoundIds.Harvest, part.Position)
         self.Net:fire("harvestFruit", plantId, slot)
+    end)
+
+    part.Parent = model
+end
+
+local function addPlantHarvestPrompt(self: PlantingClient, plantId: number, plantName: string, stage: number?, model: Model)
+    if self.Owners[plantId] ~= LocalPlayer.UserId then return end
+    if not PlantingUtils.isSingleHarvest(plantName) then return end
+
+    local config = PlantConfigs[plantName]
+    if not config then return end
+
+    local part = Instance.new("Part")
+    part.Name = "HarvestPrompt"
+    part.Size = Vector3.one
+    part.Transparency = 1
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanQuery = false
+    part.CanTouch = false
+    part.CFrame = model:GetPivot()
+
+    local prompt = Instance.new("ProximityPrompt")
+    prompt.ActionText = "Harvest"
+    prompt.ObjectText = config.Fruit or plantName
+    prompt.HoldDuration = 0
+    prompt.MaxActivationDistance = 10
+    prompt.RequiresLineOfSight = false
+    prompt.Enabled = stage ~= nil and stage >= config.GrowthStages
+    prompt.Parent = part
+
+    prompt.Triggered:Connect(function()
+        playSfxAt(SoundIds.Harvest, part.Position)
+        self.Net:fire("harvestPlant", plantId)
     end)
 
     part.Parent = model
@@ -426,7 +459,6 @@ local function createFruit(self: PlantingClient, plantId: number, fruit: Definit
 
     infos[fruit.Slot] = {
         CFrame = cframe,
-        Scale = FRUIT_SCALE,
         Name = fruit.Name,
         StartTime = fruit.SpawnTime,
         Done = fruitConfig ~= nil and stage ~= nil and stage >= fruitConfig.GrowthStages
@@ -443,7 +475,7 @@ local function createFruit(self: PlantingClient, plantId: number, fruit: Definit
         fruits[fruit.Slot] = nil
     end
 
-    local clone = spawnStageModel(FruitModels, fruit.Name, stage, cframe, FRUIT_SCALE)
+    local clone = spawnStageModel(FruitModels, fruit.Name, stage, cframe)
     if not clone then return end
 
     tagModel(clone, plantId, self.Owners[plantId], fruit.Slot)
@@ -455,23 +487,22 @@ local function createPlant(self: PlantingClient, plant: Definitions.PlantSnapsho
     clearPlant(self, plant.Id)
 
     local stage = PlantingUtils.getGrowthStageFromPlantTime(plant.Name, plant.PlantTime)
-    local scale = PlantingUtils.getScale(plant.Name, plant.Weight)
     local cframe = Serialize.UnserializeCFrame(plant.CFrame)
     local plantConfig = PlantConfigs[plant.Name]
 
     self.PlantInfo[plant.Id] = {
         CFrame = cframe,
-        Scale = scale,
         Name = plant.Name,
         StartTime = plant.PlantTime,
         Done = plantConfig ~= nil and stage ~= nil and stage >= plantConfig.GrowthStages
     }
     self.Owners[plant.Id] = plant.OwnerId
 
-    local clone = spawnStageModel(PlantModels, plant.Name, stage, cframe, scale)
+    local clone = spawnStageModel(PlantModels, plant.Name, stage, cframe)
     if clone then
         tagModel(clone, plant.Id, plant.OwnerId)
         self.Plants[plant.Id] = clone
+        addPlantHarvestPrompt(self, plant.Id, plant.Name, stage, clone)
     end
 
     for _, fruit in plant.Fruits or {} do
@@ -599,7 +630,7 @@ function PlantingClient.updatePlant(self: PlantingClient, id: number, plantName:
         info.Done = true
     end
 
-    local clone = spawnStageModel(PlantModels, plantName, stage, info.CFrame, info.Scale)
+    local clone = spawnStageModel(PlantModels, plantName, stage, info.CFrame)
     if not clone then return end
 
     tagModel(clone, id, self.Owners[id])
@@ -610,6 +641,7 @@ function PlantingClient.updatePlant(self: PlantingClient, id: number, plantName:
     end
 
     self.Plants[id] = clone
+    addPlantHarvestPrompt(self, id, plantName, stage, clone)
 end
 
 function PlantingClient.updateFruit(self: PlantingClient, plantId: number, slot: number, fruitName: string, stage: number)
@@ -622,7 +654,7 @@ function PlantingClient.updateFruit(self: PlantingClient, plantId: number, slot:
         info.Done = true
     end
 
-    local clone = spawnStageModel(FruitModels, fruitName, stage, info.CFrame, info.Scale)
+    local clone = spawnStageModel(FruitModels, fruitName, stage, info.CFrame)
     if not clone then return end
 
     tagModel(clone, plantId, self.Owners[plantId], slot)
@@ -712,7 +744,6 @@ end
 
 type StageInfo = {
     CFrame: CFrame,
-    Scale: number,
     Name: string,
     StartTime: number,
     Done: boolean

@@ -118,7 +118,7 @@ local function spawnFruits(self: Plant)
             Name = self.FruitName,
             SpawnTime = workspace:GetServerTimeNow(),
             Slot = slot,
-            CFrame = Serialize.SerializeCFrame(PlantingUtils.scaleCFrame(offsets[slot], self.Scale))
+            CFrame = Serialize.SerializeCFrame(offsets[slot])
         }
 
         self.Fruits[slot] = fruit
@@ -127,6 +127,23 @@ local function spawnFruits(self: Plant)
     end
 
     saveFruits(self)
+end
+
+local function giveFruit(plr: Player, fruitName: string): boolean
+    local data = Data[plr]
+    if not data then return false end
+
+    local multiplier = plr:GetAttribute("2xCorn") and 2 or 1
+
+    for i = 1, multiplier do
+        data.inventory.fruits.Insert(fruitName)
+    end
+
+    if not table.find(data.index(), fruitName) then
+        data.index.Insert(fruitName)
+    end
+
+    return true
 end
 
 local function collectFruit(self: Plant, plr: Player, slot: number): boolean
@@ -139,10 +156,7 @@ local function collectFruit(self: Plant, plr: Player, slot: number): boolean
     local stage = PlantingUtils.getGrowthStageFromFruitTime(fruit.Name, fruit.SpawnTime, getGrowthSpeed(plr))
     if not stage or stage < config.GrowthStages then return false end
 
-    local data = Data[plr]
-    if not data then return false end
-
-    local multiplier = plr:GetAttribute("2xCorn") and 2 or 1
+    if not giveFruit(plr, fruit.Name) then return false end
 
     self.Fruits[slot] = nil
     self.FruitStages[slot] = nil
@@ -150,8 +164,26 @@ local function collectFruit(self: Plant, plr: Player, slot: number): boolean
 
     self.Net:fireAll("deleteFruit", self.Id, slot)
 
-    for i = 1, multiplier do
-        data.inventory.fruits.Insert(fruit.Name)
+    if self.OnHarvest then
+        self.OnHarvest(plr)
+    end
+
+    return true
+end
+
+local function collectPlant(self: Plant, plr: Player): boolean
+    if self.Harvested or not self.SingleHarvest then return false end
+    if not Fruits[self.FruitName] then return false end
+
+    local stage = PlantingUtils.getGrowthStageFromPlantTime(self.Name, self.PlantTime, getGrowthSpeed(plr))
+    if not isFullyGrown(self, stage) then return false end
+
+    if not giveFruit(plr, self.FruitName) then return false end
+
+    self.Harvested = true
+
+    if self.OnHarvest then
+        self.OnHarvest(plr)
     end
 
     return true
@@ -159,6 +191,11 @@ end
 
 local function autoHarvest(self: Plant)
     if not self.Owner:GetAttribute("AutoHarvest") then return end
+
+    if self.SingleHarvest then
+        collectPlant(self, self.Owner)
+        return
+    end
 
     local slots = {}
 
@@ -189,7 +226,7 @@ local function growFruits(self: Plant)
 end
 
 function Plant.harvestFruit(self: Plant, plr: Player, slot: number)
-    if self.Destroyed or plr ~= self.Owner then return end
+    if self.Destroyed or self.SingleHarvest or plr ~= self.Owner then return end
 
     local fruit = self.Fruits[slot]
     if not fruit then return end
@@ -203,8 +240,19 @@ function Plant.harvestFruit(self: Plant, plr: Player, slot: number)
     collectFruit(self, plr, slot)
 end
 
+function Plant.harvestPlant(self: Plant, plr: Player)
+    if self.Destroyed or self.Harvested or not self.SingleHarvest or plr ~= self.Owner then return end
+
+    local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    if (root.Position - self.Pos).Magnitude > MAX_HARVEST_DISTANCE then return end
+
+    collectPlant(self, plr)
+end
+
 function Plant.update(self: Plant)
-    if self.Destroyed then return end
+    if self.Destroyed or self.Harvested then return end
 
     if not self.FullyGrown then
         local stage = PlantingUtils.getGrowthStageFromPlantTime(self.Name, self.PlantTime, getGrowthSpeed(self.Owner))
@@ -222,13 +270,18 @@ function Plant.update(self: Plant)
 
     if not self.FullyGrown then return end
 
+    if self.SingleHarvest then
+        autoHarvest(self)
+        return
+    end
+
     updateFruits(self)
     autoHarvest(self)
     spawnFruits(self)
 end
 
 function Plant.canGrow(self: Plant): boolean
-    if self.Destroyed then return false end
+    if self.Destroyed or self.Harvested then return false end
 
     local speed = getGrowthSpeed(self.Owner)
 
@@ -238,6 +291,10 @@ function Plant.canGrow(self: Plant): boolean
         if not isFullyGrown(self, stage) then
             return true
         end
+    end
+
+    if self.SingleHarvest then
+        return false
     end
 
     for _, fruit in self.Fruits do
@@ -253,7 +310,7 @@ function Plant.canGrow(self: Plant): boolean
 end
 
 function Plant.growNow(self: Plant)
-    if self.Destroyed then return end
+    if self.Destroyed or self.Harvested then return end
 
     if not self.FullyGrown then
         self.PlantTime = 0
@@ -265,7 +322,7 @@ function Plant.growNow(self: Plant)
 
     self:update()
 
-    if self.Destroyed or not self.FullyGrown then return end
+    if self.Destroyed or self.Harvested or self.SingleHarvest or not self.FullyGrown then return end
 
     growFruits(self)
 end
@@ -287,7 +344,6 @@ function Plant.snapshot(self: Plant): Definitions.PlantSnapshot
         OwnerId = self.Owner.UserId,
         Name = self.Name,
         PlantTime = self.PlantTime,
-        Weight = self.Weight,
         CFrame = Serialize.SerializeCFrame(self.CFrame),
         Fruits = fruits
     }
@@ -301,9 +357,10 @@ function Plant.destroy(self: Plant)
     table.clear(self.Fruits)
     table.clear(self.FruitStages)
     self.Saved = nil
+    self.OnHarvest = nil
 end
 
-function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, plantName: string, cframe: CFrame, weight: number, plantTime: number, fruits: {Definitions.Fruit}?, saved: Definitions.Plant?)
+function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, plantName: string, cframe: CFrame, plantTime: number, fruits: {Definitions.Fruit}?, saved: Definitions.Plant?)
     local config = Plants[plantName]
     assert(config, "Plant config is missing for " .. plantName .. "!")
 
@@ -318,23 +375,24 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
     self.Owner = farmer
     self.CFrame = cframe
     self.Pos = cframe.Position
-    self.Weight = weight
-    self.Scale = PlantingUtils.getScale(plantName, weight)
     self.Name = plantName
     self.PlantTime = plantTime
     self.LastStage = stage or 0
     self.FullyGrown = isFullyGrown(self, stage)
     self.Destroyed = false
+    self.Harvested = false
+    self.SingleHarvest = PlantingUtils.isSingleHarvest(plantName)
     self.FruitName = config.Fruit or plantName
     self.Fruits = {}
     self.FruitStages = {}
     self.Saved = saved
+    self.OnHarvest = nil
 
     if not Fruits[self.FruitName] then
         warn("Fruit config is missing for " .. self.FruitName .. "!")
     end
 
-    if fruits and self.FullyGrown then
+    if fruits and self.FullyGrown and not self.SingleHarvest then
         local offsets = getSpawnOffsets(plantName)
 
         for _, fruit in fruits do
@@ -343,7 +401,7 @@ function Plant.new(net: typeof(Networker.server), farmer: Player, id: number, pl
 
             if fruitStage and validSlot and not self.Fruits[fruit.Slot] then
                 (fruit :: any).Weight = nil
-                fruit.CFrame = Serialize.SerializeCFrame(PlantingUtils.scaleCFrame(offsets[fruit.Slot], self.Scale))
+                fruit.CFrame = Serialize.SerializeCFrame(offsets[fruit.Slot])
                 self.Fruits[fruit.Slot] = fruit
                 self.FruitStages[fruit.Slot] = fruitStage
             end
@@ -361,17 +419,18 @@ type Plant = typeof(Plant) & {
     Owner: Player,
     CFrame: CFrame,
     Pos: Vector3,
-    Weight: number,
-    Scale: number,
     Name: string,
     PlantTime: number,
     LastStage: number,
     FullyGrown: boolean,
     Destroyed: boolean,
+    Harvested: boolean,
+    SingleHarvest: boolean,
     FruitName: string,
     Fruits: {[number]: Definitions.Fruit},
     FruitStages: {[number]: number},
-    Saved: Definitions.Plant?
+    Saved: Definitions.Plant?,
+    OnHarvest: ((Player) -> ())?
 }
 
 return Plant

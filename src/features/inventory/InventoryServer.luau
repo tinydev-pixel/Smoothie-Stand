@@ -1,5 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+local TutorialServiceServer = require(ServerScriptService.Features.Tutorial.TutorialServiceServer)
 local Networker = require(ReplicatedStorage.Source.Packages.Networker)
 
 local hotbarLimit = 6
@@ -183,6 +185,10 @@ function InventoryServer.equip(self: InventoryServer, plr: Player, item: string)
     local tool = backpack and backpack:FindFirstChild(item)
     if tool and tool:IsA("Tool") then
         hum:EquipTool(tool)
+
+        if tool.Parent == char then
+            TutorialServiceServer:onEquipped(plr, item)
+        end
     end
 end
 

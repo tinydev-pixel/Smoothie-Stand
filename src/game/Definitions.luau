@@ -15,7 +15,6 @@ export type UpgradeNode = {
 export type Plant = {
 	Name: string,
 	PlantTime: number,
-	Weight: number,
 	Pos: {number},
 	Fruits: {Fruit}?,
 	Space: string?
@@ -33,7 +32,6 @@ export type PlantSnapshot = {
 	OwnerId: number,
 	Name: string,
 	PlantTime: number,
-	Weight: number,
 	CFrame: {number},
 	Fruits: {Fruit}
 }

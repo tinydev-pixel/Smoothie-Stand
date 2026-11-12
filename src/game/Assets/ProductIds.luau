@@ -5,5 +5,8 @@ return {
     ["SkipRebirth"] = 3728568353,
     ["DoubleOfflineRewards"] = 3728568555,
     ["FinishAll"] = 3728568657,
-    ["GrowAll"] = 3728568765
+    ["GrowAll"] = 3728568765,
+    ["RestockSeedShop"] = 3730299726,
+    ["Carrot Seed"] = 3730470732,
+    ["Apple Seed"] = 3730470814
 }

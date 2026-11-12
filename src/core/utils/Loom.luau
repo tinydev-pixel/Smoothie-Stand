@@ -15,16 +15,22 @@
 		Loom.Close(myFrame)
 		Loom.Toggle(myFrame)
 
+		-- optional: one click sound used by every Loom.Hover element
+		Loom.SetClickSound(SoundIds.Click)
+
 		Loom.Hover(myButton, {
 			HoverScale = 1.05,
 			IdleScale = 1,
 			PressScale = 0.9,
+			ClickSound = SoundIds.Click, -- optional, overrides the default for this element
 		})
 ]]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local UserInputService = game:GetService("UserInputService")
+local Audio = require(ReplicatedStorage.Source.Packages.Audio)
 
 export type HoverOptions = {
 	HoverScale: number?,
@@ -34,6 +40,7 @@ export type HoverOptions = {
 	IdleColor: Color3?,
 	PressColor: Color3?,
 	TweenInfo: TweenInfo?,
+	ClickSound: any?,
 }
 
 local Loom = {}
@@ -64,6 +71,20 @@ local blur: BlurEffect = getOrCreateBlur()
 local currentFrame: GuiObject? = nil
 local frameScales: {[GuiObject]: UIScale} = {}
 local activeTweens: {[Instance]: Tween} = {}
+local defaultClickSound: any? = nil
+local audio: any = nil
+
+local function playClickSound(soundId: any?)
+	if not soundId then
+		return
+	end
+
+	if not audio then
+		audio = Audio.new()
+	end
+
+	audio:PlaySFX(soundId)
+end
 
 local function cancelTween(instance: Instance)
 	local tween = activeTweens[instance]
@@ -118,6 +139,17 @@ end
 local function isPressInput(input: InputObject): boolean
 	return input.UserInputType == Enum.UserInputType.MouseButton1
 		or input.UserInputType == Enum.UserInputType.Touch
+end
+
+--[[
+	Sets the click sound that every Loom.Hover element plays when pressed,
+	unless that element passes its own ClickSound option. Pass nil to clear it.
+
+	Example:
+		Loom.SetClickSound(SoundIds.Click)
+]]
+function Loom.SetClickSound(soundId: any?)
+	defaultClickSound = soundId
 end
 
 --[[
@@ -204,9 +236,9 @@ end
 	Sets up hover and press animations on any GuiObject (buttons, frames, etc).
 	Call once per element, e.g. right after you create/parent it.
 
-	Pressing (mouse click or touch, held or tapped) shrinks the element,
-	and releasing tweens it back to the hover state if the cursor is
-	still over it, or to the idle state if not.
+	Pressing (mouse click or touch, held or tapped) shrinks the element
+	and plays the click sound, and releasing tweens it back to the hover
+	state if the cursor is still over it, or to the idle state if not.
 
 	options (all optional):
 		HoverScale  number    -- UIScale to tween to on hover (default 1.1)
@@ -216,6 +248,7 @@ end
 		IdleColor   Color3    -- BackgroundColor3 to return to (defaults to current)
 		PressColor  Color3    -- BackgroundColor3 to tween to while pressed (defaults to HoverColor)
 		TweenInfo   TweenInfo -- overrides the default hover/press tween speed/style
+		ClickSound  any       -- sound id played on press (defaults to Loom.SetClickSound's sound)
 ]]
 function Loom.Hover(element: GuiObject, options: HoverOptions?)
 	local resolvedOptions: HoverOptions = options or {}
@@ -226,6 +259,7 @@ function Loom.Hover(element: GuiObject, options: HoverOptions?)
 	local hoverColor: Color3? = resolvedOptions.HoverColor
 	local pressColor: Color3? = resolvedOptions.PressColor or hoverColor
 	local info: TweenInfo = resolvedOptions.TweenInfo or HOVER_TWEEN_INFO
+	local clickSound: any? = resolvedOptions.ClickSound
 
 	local uiScale: UIScale = element:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
 	uiScale.Scale = idleScale
@@ -272,6 +306,7 @@ function Loom.Hover(element: GuiObject, options: HoverOptions?)
 		hovering = true
 		pressed = true
 		refresh()
+		playClickSound(clickSound or defaultClickSound)
 	end))
 
 	table.insert(connections, UserInputService.InputEnded:Connect(function(input: InputObject)
